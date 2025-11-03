@@ -1,0 +1,112 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #f8f9fa;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+}
+
+.login-card {
+  background: white;
+  padding: 40px;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-card h1 {
+  color: #1e40af;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.subtitle {
+  text-align: center;
+  color: #666;
+  margin-bottom: 30px;
+}
+
+.app-container {
+  background-color: #f8f9fa;
+  min-height: 100vh;
+  padding-bottom: 40px;
+}
+
+.navbar-brand {
+  font-weight: bold;
+  font-size: 1.5rem;
+}
+
+.card {
+  border: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.card-header {
+  font-weight: bold;
+  border: none;
+}
+
+.card-body {
+  padding: 30px;
+}
+
+.form-control, .form-select {
+  border-radius: 5px;
+  border: 1px solid #e0e0e0;
+}
+
+.btn {
+  border-radius: 5px;
+  font-weight: 600;
+  padding: 10px 20px;
+}
+
+.btn-primary {
+  background-color: #1e40af;
+  border: none;
+}
+
+.btn-primary:hover {
+  background-color: #1e3a8a;
+}
+
+.btn-success {
+  background-color: #10b981;
+  border: none;
+}
+
+.btn-success:hover {
+  background-color: #059669;
+}
+
+.table {
+  margin-bottom: 0;
+}
+
+.table-striped tbody tr:hover {
+  background-color: #f0f0f0;
+}
+
+.badge {
+  padding: 5px 10px;
+  font-weight: 600;
+}
+
+textarea.form-control {
+  resize: vertical;
+  font-family: 'Courier New', monospace;
+}
