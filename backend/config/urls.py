@@ -1,11 +1,21 @@
 from django.contrib import admin
-from django.urls import path
-from incidents import views
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from incidents.views import IncidentViewSet
+
+# Crear router para ViewSet
+router = DefaultRouter()
+router.register(r'incidents', IncidentViewSet, basename='incident')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/incidents/', views.get_incidents, name='get_incidents'),
-    path('api/incidents/analyze/', views.analyze_incident, name='analyze_incident'),
-    path('api/dashboard/stats/', views.get_dashboard_stats, name='dashboard_stats'),
-    path('api/incidents/update-status/', views.update_incident_status, name='update_incident_status'),
+    # Todas las rutas del ViewSet se incluyen automáticamente
+    # GET    /api/incidents/          - Listar todos
+    # POST   /api/incidents/          - Crear nuevo
+    # GET    /api/incidents/{id}/     - Detalle
+    # PUT    /api/incidents/{id}/     - Actualizar
+    # DELETE /api/incidents/{id}/     - Eliminar
+    # POST   /api/incidents/{id}/analyze/ - Análisis IA
+    # GET    /api/incidents/stats/    - Estadísticas
+    path('api/', include(router.urls)),
 ]
