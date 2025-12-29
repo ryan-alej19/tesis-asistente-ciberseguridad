@@ -4,7 +4,7 @@
 **Autor:** Ryan Gallegos Mera  
 **Universidad:** PUCESI - Ibarra, Ecuador  
 **Empresa:** Talleres Luis Mera  
-**Estado:** EN DESARROLLO ✅ (100% Backend, 70% Frontend)  
+ 
 
 ---
 
