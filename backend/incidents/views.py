@@ -1,362 +1,328 @@
 """
-Views para gestión de incidentes con Django REST Framework
-Cada incidente se guarda en la base de datos SQLite
+Vistas para gestión de incidentes con Django REST Framework
+Soporte completo para roles: admin, analyst, employee
 """
-from rest_framework import viewsets, status, filters, permissions
-from rest_framework.decorators import action, api_view
+
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.pagination import PageNumberPagination
-from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Avg
+from rest_framework.views import APIView
+from django.db.models import Q, Count, Avg, F
 from django.utils import timezone
-from django.contrib.auth.models import User
+from datetime import timedelta
+
+from incidents.models import Incident, CustomUser
+from incidents.serializers import IncidentSerializer, UserSerializer
+from ia_classifier.classifier import classify_incident, get_classification_explanation
 
 
-from .models import Incident
-from .serializers import IncidentSerializer, IncidentListSerializer, IncidentCreateSerializer
-from ia_classifier.classifier import IncidentClassifier
-from ia_classifier.classifier import IncidentClassifier  # ← AGREGAR ESTO
-
-
-# ============================================
-# PAGINACIÓN ESTÁNDAR
-# ============================================
-
-class StandardPagination(PageNumberPagination):
-    """Paginación estándar: 20 incidentes por página"""
-    page_size = 20
-    page_size_query_param = 'page_size'
-    max_page_size = 100
-
-
-# ============================================
-# VIEWSET PRINCIPAL DE INCIDENTES
-# ============================================
-
-class IncidentViewSet(viewsets.ModelViewSet):
+class IncidentListCreateView(APIView):
     """
-    API ViewSet para gestionar incidentes de ciberseguridad
-    
-    Endpoints disponibles:
-    - GET /api/incidents/ - Listar todos
-    - POST /api/incidents/ - Crear nuevo
-    - GET /api/incidents/{id}/ - Obtener detalle
-    - PUT /api/incidents/{id}/ - Actualizar completo
-    - PATCH /api/incidents/{id}/ - Actualizar parcial
-    - DELETE /api/incidents/{id}/ - Eliminar
-    
-    Acciones personalizadas:
-    - POST /api/incidents/{id}/resolve/ - Marcar como resuelto
-    - POST /api/incidents/{id}/assign/ - Asignar a usuario
-    - GET /api/incidents/critical/ - Obtener solo críticos
-    - GET /api/incidents/statistics/ - Estadísticas
-    - GET /api/incidents/recent/ - Últimas 24 horas
-    - POST /api/incidents/bulk_resolve/ - Resolver múltiples
+    GET: Listar incidentes (filtrados por rol del usuario)
+    POST: Crear nuevo incidente con clasificación automática
     """
+    permission_classes = [IsAuthenticated]
     
-    queryset = Incident.objects.select_related('assigned_to').order_by('-detected_at')
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    pagination_class = StandardPagination
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    
-    # Filtros disponibles
-    filterset_fields = ['severity', 'status', 'threat_type', 'assigned_to']
-    
-    # Búsqueda
-    search_fields = ['title', 'description', 'threat_type', 'ip_source', 'ip_destination']
-    
-    # Ordenamiento
-    ordering_fields = ['detected_at', 'severity', 'confidence', 'created_at']
-    ordering = ['-detected_at']
-    
-    def get_serializer_class(self):
-        """Retorna diferente serializer según la acción"""
-        if self.action == 'list':
-            return IncidentListSerializer
-        elif self.action == 'create':
-            return IncidentCreateSerializer
-        return IncidentSerializer
-    
-    def create(self, request, *args, **kwargs):
+    def get(self, request):
         """
-        Crear nuevo incidente con clasificación automática por IA
+        Listar incidentes según el rol del usuario.
         
-        POST /api/incidents/
+        Admin: Ve TODO
+        Analyst: Ve los asignados a él y los sin asignar
+        Employee: Ve solo los que reportó
+        """
+        user = request.user
+        
+        # Filtrado por rol
+        if user.role == 'admin':
+            # Admin ve TODOS los incidentes
+            incidents = Incident.objects.all()
+        elif user.role == 'analyst':
+            # Analista ve los asignados a él + los sin asignar
+            incidents = Incident.objects.filter(
+                Q(assigned_to=user) | Q(assigned_to__isnull=True)
+            )
+        else:  # employee
+            # Empleado ve solo los que él reportó
+            incidents = Incident.objects.filter(reported_by=user)
+        
+        # Ordenar por más reciente
+        incidents = incidents.order_by('-created_at')
+        
+        # Serializar
+        serializer = IncidentSerializer(incidents, many=True)
+        
+        return Response({
+            'count': incidents.count(),
+            'results': serializer.data,
+            'user_role': user.role
+        })
+    
+    def post(self, request):
+        """
+        Crear nuevo incidente con clasificación automática.
         
         Body esperado:
         {
-            "title": "Incidente de seguridad",
+            "title": "Título del incidente",
             "description": "Descripción detallada",
-            "threat_type": "phishing",  // phishing, malware, acceso_sospechoso, otro
-            "severity": "medium"  // Opcional - será calculado por IA
+            "incident_type": "phishing"  // Opcional
         }
         """
+        user = request.user
         
-        # Obtener datos del request
-        title = request.data.get('title', '')
-        description = request.data.get('description', '')
-        threat_type = request.data.get('threat_type', 'otro')
+        # Solo empleados y analistas pueden reportar
+        # (admins no reportan, solo gestionan)
+        if user.role == 'admin':
+            return Response(
+                {'error': 'Admin no puede reportar incidentes'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
-        # Validación básica
+        # Validaciones básicas
+        title = request.data.get('title', '').strip()
+        description = request.data.get('description', '').strip()
+        incident_type = request.data.get('incident_type', '').strip()
+        
         if not title or not description:
             return Response(
                 {'error': 'Título y descripción son requeridos'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # ✨ LLAMAR AL CLASIFICADOR IA ✨
-        classifier = IncidentClassifier()
-        severity, confidence_score = classifier.classify(description, threat_type)
+        # 🤖 CLASIFICACIÓN AUTOMÁTICA CON IA
+        severity, confidence, threat_type = classify_incident(
+            title, description, incident_type
+        )
         
-        # Crear el incidente con severidad asignada automáticamente
+        # Crear incidente
         incident = Incident.objects.create(
             title=title,
             description=description,
-            threat_type=threat_type,
+            incident_type=incident_type or 'unknown',
             severity=severity,
-            confidence=confidence_score,
+            confidence=confidence,
+            threat_type=threat_type,
             status='new',
-            detected_at=timezone.now()
+            reported_by=user,
+            detected_at=timezone.now(),
+            created_at=timezone.now()
         )
         
-        # Retornar respuesta completa
         serializer = IncidentSerializer(incident)
-        return Response(
-            {
-                'status': 'success',
-                'message': f'Incidente creado. Severidad asignada: {severity}',
-                'incident': serializer.data
-            },
-            status=status.HTTP_201_CREATED
-        )
+        
+        return Response({
+            'status': 'success',
+            'message': f'Incidente creado y clasificado como {severity}',
+            'incident': serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+
+class IncidentDetailView(APIView):
+    """
+    GET: Obtener detalles de un incidente
+    PATCH: Actualizar un incidente
+    DELETE: Eliminar un incidente
+    """
+    permission_classes = [IsAuthenticated]
     
-    def perform_update(self, serializer):
-        """Hook que se ejecuta al actualizar"""
-        serializer.save()
-    
-    # ============================================
-    # ACCIONES PERSONALIZADAS
-    # ============================================
-    
-    @action(detail=True, methods=['post'])
-    def resolve(self, request, pk=None):
+    def get_object(self, pk, user):
         """
-        Acción: Marcar incidente como resuelto
-        POST /api/incidents/{id}/resolve/
+        Obtener incidente verificando permisos
         """
-        incident = self.get_object()
-        incident.status = 'resolved'
-        incident.resolved_at = timezone.now()
+        try:
+            incident = Incident.objects.get(pk=pk)
+        except Incident.DoesNotExist:
+            return None
+        
+        # Verificar permisos
+        if user.role == 'employee':
+            # Empleado solo ve los suyos
+            if incident.reported_by != user:
+                return None
+        # Admin y analyst ven todos
+        
+        return incident
+    
+    def get(self, request, pk):
+        """
+        Obtener detalles de un incidente
+        """
+        incident = self.get_object(pk, request.user)
+        
+        if not incident:
+            return Response(
+                {'error': 'No encontrado o sin permisos'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = IncidentSerializer(incident)
+        return Response(serializer.data)
+    
+    def patch(self, request, pk):
+        """
+        Actualizar incidente (cambiar estado, asignar, etc)
+        """
+        incident = self.get_object(pk, request.user)
+        
+        if not incident:
+            return Response(
+                {'error': 'No encontrado o sin permisos'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Solo admin y analyst pueden actualizar
+        if request.user.role == 'employee':
+            return Response(
+                {'error': 'Empleado no puede actualizar incidentes'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Actualizar campos permitidos
+        if 'status' in request.data:
+            incident.status = request.data['status']
+        
+        if 'notes' in request.data:
+            incident.notes = request.data['notes']
+        
+        if 'assigned_to' in request.data:
+            user_id = request.data['assigned_to']
+            if user_id:
+                try:
+                    assigned_user = CustomUser.objects.get(id=user_id)
+                    incident.assigned_to = assigned_user
+                except CustomUser.DoesNotExist:
+                    return Response(
+                        {'error': 'Usuario no encontrado'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        
+        incident.updated_at = timezone.now()
         incident.save()
         
         serializer = IncidentSerializer(incident)
-        return Response(
-            {
-                'status': 'success',
-                'message': f'Incidente {incident.id} marcado como resuelto',
-                'incident': serializer.data
-            },
-            status=status.HTTP_200_OK
-        )
-    
-    @action(detail=True, methods=['post'])
-    def assign(self, request, pk=None):
-        """
-        Acción: Asignar incidente a un usuario
-        POST /api/incidents/{id}/assign/
-        Body: {"user_id": 1}
-        """
-        incident = self.get_object()
-        user_id = request.data.get('user_id')
-        
-        if not user_id:
-            return Response(
-                {'error': 'user_id es requerido'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            user = User.objects.get(id=user_id)
-            incident.assigned_to = user
-            incident.save()
-            
-            serializer = IncidentSerializer(incident)
-            return Response(
-                {
-                    'status': 'success',
-                    'message': f'Incidente asignado a {user.username}',
-                    'incident': serializer.data
-                },
-                status=status.HTTP_200_OK
-            )
-        except User.DoesNotExist:
-            return Response(
-                {'error': f'Usuario con ID {user_id} no existe'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-    
-    @action(detail=False, methods=['get'])
-    def critical(self, request):
-        """
-        Acción: Obtener solo incidentes críticos
-        GET /api/incidents/critical/
-        """
-        critical_incidents = self.queryset.filter(
-            severity='critical',
-            confidence__gte=0.8
-        )
-        
-        page = self.paginate_queryset(critical_incidents)
-        if page is not None:
-            serializer = IncidentSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        
-        serializer = IncidentSerializer(critical_incidents, many=True)
         return Response(serializer.data)
     
-    @action(detail=False, methods=['get'])
-    def statistics(self, request):
+    def delete(self, request, pk):
         """
-        Acción: Obtener estadísticas de incidentes
-        GET /api/incidents/statistics/
+        Eliminar incidente (solo admin)
         """
-        total = self.queryset.count()
-        by_severity = self.queryset.values('severity').annotate(count=Count('id'))
-        by_status = self.queryset.values('status').annotate(count=Count('id'))
-        by_type = self.queryset.values('threat_type').annotate(count=Count('id'))
-        avg_confidence = self.queryset.aggregate(Avg('confidence'))['confidence__avg'] or 0
+        if request.user.role != 'admin':
+            return Response(
+                {'error': 'Solo admin puede eliminar incidentes'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        incident = self.get_object(pk, request.user)
+        
+        if not incident:
+            return Response(
+                {'error': 'No encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        incident.delete()
+        
+        return Response(
+            {'message': 'Incidente eliminado'},
+            status=status.HTTP_204_NO_CONTENT
+        )
+
+
+class DashboardStatsView(APIView):
+    """
+    Estadísticas del dashboard filtradas por rol
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """
+        Retorna estadísticas según el rol del usuario
+        """
+        user = request.user
+        
+        # Filtrado base
+        if user.role == 'admin':
+            incidents = Incident.objects.all()
+        elif user.role == 'analyst':
+            incidents = Incident.objects.filter(
+                Q(assigned_to=user) | Q(assigned_to__isnull=True)
+            )
+        else:  # employee
+            incidents = Incident.objects.filter(reported_by=user)
+        
+        # Calcular estadísticas
+        total = incidents.count()
         
         # Críticos sin resolver
-        unresolved_critical = self.queryset.filter(
+        critical_unresolved = incidents.filter(
             severity='critical',
             status__in=['new', 'under_review', 'in_progress']
         ).count()
         
+        # Confianza promedio
+        avg_confidence = incidents.aggregate(avg=Avg('confidence'))['avg'] or 0.0
+        
+        # Por severidad
+        by_severity = {}
+        for choice_value, choice_label in Incident.SEVERITY_CHOICES:
+            by_severity[choice_value] = incidents.filter(severity=choice_value).count()
+        
+        # Por estado
+        by_status = {}
+        for choice_value, choice_label in Incident.STATUS_CHOICES:
+            by_status[choice_value] = incidents.filter(status=choice_value).count()
+        
         return Response({
             'total_incidents': total,
-            'by_severity': list(by_severity),
-            'by_status': list(by_status),
-            'by_type': list(by_type),
-            'average_confidence': round(avg_confidence * 100, 2),
-            'unresolved_critical': unresolved_critical,
+            'critical_unresolved': critical_unresolved,
+            'average_confidence': round(avg_confidence, 2),
+            'by_severity': by_severity,
+            'by_status': by_status,
+            'user_role': user.role,
         })
+
+
+class ClassifyIncidentView(APIView):
+    """
+    Endpoint para clasificar un incidente manualmente
+    (prueba de la IA)
+    """
+    permission_classes = [IsAuthenticated]
     
-    @action(detail=False, methods=['get'])
-    def recent(self, request):
+    def post(self, request):
         """
-        Acción: Obtener incidentes recientes (últimas 24 horas)
-        GET /api/incidents/recent/
+        Clasificar un incidente sin guardarlo
+        
+        Body:
+        {
+            "title": "Título",
+            "description": "Descripción",
+            "incident_type": "phishing"
+        }
         """
-        from datetime import timedelta
+        title = request.data.get('title', '')
+        description = request.data.get('description', '')
+        incident_type = request.data.get('incident_type', '')
         
-        cutoff_time = timezone.now() - timedelta(hours=24)
-        recent_incidents = self.queryset.filter(detected_at__gte=cutoff_time)
-        
-        page = self.paginate_queryset(recent_incidents)
-        if page is not None:
-            serializer = IncidentSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        
-        serializer = IncidentSerializer(recent_incidents, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['post'])
-    def bulk_resolve(self, request):
-        """
-        Acción: Resolver múltiples incidentes a la vez
-        POST /api/incidents/bulk_resolve/
-        Body: {"incident_ids": [1, 2, 3]}
-        """
-        incident_ids = request.data.get('incident_ids', [])
-        
-        if not incident_ids:
+        if not description:
             return Response(
-                {'error': 'incident_ids es requerido'},
+                {'error': 'description es requerido'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        updated = Incident.objects.filter(id__in=incident_ids).update(
-            status='resolved',
-            resolved_at=timezone.now()
+        # Clasificar
+        severity, confidence, threat_type = classify_incident(
+            title, description, incident_type
         )
+        
+        # Obtener explicación
+        explanation = get_classification_explanation(severity, confidence, threat_type)
         
         return Response({
-            'status': 'success',
-            'message': f'{updated} incidentes marcados como resueltos',
-            'updated_count': updated
+            'severity': severity,
+            'confidence': confidence,
+            'threat_type': threat_type,
+            'explanation': explanation
         })
-
-
-# ============================================
-# ENDPOINT ALTERNATIVO (compatibilidad)
-# ============================================
-
-@api_view(['POST'])
-def create_incident_report_from_form(request):
-    """
-    Endpoint alternativo para recibir reportes del formulario
-    
-    POST /api/create-report/
-    
-    Body esperado:
-    {
-        "description": "Descripción del incidente",
-        "threat_type": "phishing"
-    }
-    """
-    try:
-        description = request.data.get('description')
-        threat_type = request.data.get('threat_type', 'otro')
-        
-        if not description or description.strip() == '':
-            return Response(
-                {
-                    'status': 'error',
-                    'message': 'La descripción del incidente es requerida'
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Usar clasificador IA
-        classifier = IncidentClassifier()
-        severity, confidence_score = classifier.classify(description, threat_type)
-        
-        # Crear incidente
-        incident = Incident.objects.create(
-            title=f"Reporte: {threat_type.upper()}",
-            description=description,
-            threat_type=threat_type,
-            severity=severity,
-            confidence=confidence_score,
-            status='new',
-            detected_at=timezone.now()
-        )
-        
-        return Response(
-            {
-                'status': 'success',
-                'message': 'Incidente reportado exitosamente',
-                'incident_id': incident.id,
-                'severity': severity,
-                'confidence': confidence_score,
-                'incident': {
-                    'id': incident.id,
-                    'title': incident.title,
-                    'description': incident.description,
-                    'severity': incident.severity,
-                    'confidence': incident.confidence,
-                    'status': incident.status,
-                    'created_at': incident.created_at
-                }
-            },
-            status=status.HTTP_201_CREATED
-        )
-    
-    except Exception as e:
-        return Response(
-            {
-                'status': 'error',
-                'message': f'Error al crear el incidente: {str(e)}'
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
