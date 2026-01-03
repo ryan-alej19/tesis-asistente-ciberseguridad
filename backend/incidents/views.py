@@ -1,7 +1,7 @@
 """
 🚨 VIEWS DE INCIDENTES - TESIS CIBERSEGURIDAD
-Ryan Gallegos Mera - PUCEI
-Última actualización: 02 de Enero, 2026
+Ryan Gallegos Mera - PUCESI
+Última actualización: 03 de Enero, 2026
 """
 
 from rest_framework import generics, status, filters
@@ -16,10 +16,12 @@ from datetime import timedelta
 from .models import Incident
 from .serializers import IncidentSerializer
 from ia_classifier.classifier import IncidentClassifier
+from .virustotal_service import VirusTotalService
+from .gemini_service import GeminiService
 
 
 # ========================================
-# 🔥 NUEVO: GET INCIDENTES POR ROL
+# 🔥 GET INCIDENTES POR ROL
 # ========================================
 
 @api_view(['GET'])
@@ -36,7 +38,6 @@ def get_my_incidents(request):
     print(f"{'='*60}")
     
     try:
-        # Filtrar según el rol
         if user_role == 'admin':
             incidents = Incident.objects.all().order_by('-created_at')
             print(f"✅ Admin - {incidents.count()} incidentes totales")
@@ -49,7 +50,6 @@ def get_my_incidents(request):
             incidents = Incident.objects.filter(reported_by=user).order_by('-created_at')
             print(f"✅ Employee - {incidents.count()} incidentes reportados")
             
-            # Debug: mostrar IDs de incidentes encontrados
             if incidents.exists():
                 ids = [inc.id for inc in incidents]
                 print(f"   IDs encontrados: {ids}")
@@ -63,7 +63,6 @@ def get_my_incidents(request):
         
         print(f"📊 Intentando serializar {incidents.count()} incidentes...")
         
-        # Serializar y devolver
         serializer = IncidentSerializer(incidents, many=True, context={'request': request})
         
         print(f"✅ Serialización exitosa - Retornando {len(serializer.data)} items")
@@ -100,7 +99,6 @@ def get_dashboard_stats(request):
     user_role = user.role
     
     try:
-        # Obtener incidentes según rol
         if user_role == 'admin':
             incidents = Incident.objects.all()
         elif user_role == 'analyst':
@@ -108,7 +106,6 @@ def get_dashboard_stats(request):
         else:  # employee
             incidents = Incident.objects.filter(reported_by=user)
         
-        # Estadísticas básicas
         stats = {
             'role': user_role,
             'total': incidents.count(),
@@ -121,11 +118,9 @@ def get_dashboard_stats(request):
             'closed': incidents.filter(status='resolved').count(),
         }
         
-        # Confianza promedio
         avg_confidence = incidents.aggregate(Avg('confidence'))['confidence__avg'] or 0
         stats['average_confidence'] = round(avg_confidence * 100, 2)
         
-        # ESTADÍSTICAS EXTRAS PARA ADMIN
         if user_role == 'admin':
             from django.contrib.auth import get_user_model
             User = get_user_model()
@@ -140,7 +135,6 @@ def get_dashboard_stats(request):
                 ).count(),
             }
         
-        # ESTADÍSTICAS EXTRAS PARA ANALYST
         elif user_role == 'analyst':
             stats['analyst_extra'] = {
                 'pending_review': incidents.filter(status='new').count(),
@@ -148,7 +142,6 @@ def get_dashboard_stats(request):
                 'resolved_by_me': incidents.filter(status='resolved').count(),
             }
         
-        # ESTADÍSTICAS EXTRAS PARA EMPLOYEE
         elif user_role == 'employee':
             stats['employee_extra'] = {
                 'my_open': incidents.filter(status='new').count(),
@@ -182,60 +175,132 @@ class IncidentListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         """
-        Guarda el incidente con clasificación automática de IA
-        Y lo asigna automáticamente al primer analista disponible
+        🔥 ACTUALIZADO: IA Local + VirusTotal + Gemini
         """
-        # Obtener datos del incidente
         description = self.request.data.get('description', '')
         url = self.request.data.get('url', '')
         threat_type = self.request.data.get('threat_type', 'phishing')
         
-        # Combinar URL y descripción para mejor análisis
         text_to_analyze = f"{url} {description}"
         
-        # ✅ CLASIFICACIÓN CON IA (con manejo de errores)
+        print(f"\n{'='*60}")
+        print(f"🚨 CREANDO NUEVO INCIDENTE")
+        print(f"{'='*60}")
+        print(f"URL: {url}")
+        print(f"Descripción: {description}")
+        
+        # ✅ PASO 1: IA LOCAL
         try:
             classifier = IncidentClassifier()
             result = classifier.classify(text_to_analyze, threat_type)
             
-            # Verificar si retorna tupla (severity, confidence) o solo severity
             if isinstance(result, tuple) and len(result) == 2:
                 severity, confidence = result
             elif isinstance(result, tuple) and len(result) == 1:
                 severity = result[0]
                 confidence = 0.75
             else:
-                # Si es un string directo
                 severity = result
                 confidence = 0.75
             
+            print(f"✅ IA LOCAL: {severity.upper()} ({round(confidence*100)}%)")
+        
         except Exception as e:
-            print(f"⚠️ Error en clasificador IA: {e}")
+            print(f"⚠️ Error en IA local: {e}")
             severity = 'medium'
             confidence = 0.5
         
-        # 🔥 AUTO-ASIGNAR AL PRIMER ANALISTA DISPONIBLE
+        # 🛡️ PASO 2: VIRUSTOTAL
+        virustotal_result = None
+        if url:
+            try:
+                vt_service = VirusTotalService()
+                vt_result = vt_service.analyze_url(url)
+                
+                if vt_result.get("success"):
+                    virustotal_result = vt_result
+                    detections = vt_result.get("detections", 0)
+                    total_engines = vt_result.get("total_engines", 0)
+                    
+                    print(f"🛡️ VIRUSTOTAL: {detections}/{total_engines} detecciones")
+                    
+                    # Ajustar severidad según detecciones
+                    if detections >= 5:
+                        severity = 'critical'
+                        confidence = 0.95
+                    elif detections >= 2:
+                        if severity not in ['critical']:
+                            severity = 'high'
+                            confidence = 0.85
+                    elif detections == 1:
+                        if severity == 'low':
+                            severity = 'medium'
+                        confidence = max(confidence, 0.75)
+                    else:
+                        # URL limpia según VirusTotal
+                        if severity == 'critical' and detections == 0:
+                            severity = 'high'
+                
+                else:
+                    virustotal_result = vt_result
+                    print(f"⚠️ VirusTotal: {vt_result.get('error', 'Error desconocido')}")
+            
+            except Exception as e:
+                print(f"❌ Error en VirusTotal: {e}")
+                virustotal_result = {
+                    'success': False,
+                    'error': str(e)
+                }
+        
+        # 🤖 PASO 3: GEMINI
+        gemini_analysis = None
+        try:
+            gemini_service = GeminiService()
+            gemini_result = gemini_service.analyze_incident(
+                description=description,
+                url=url,
+                threat_type=threat_type
+            )
+            
+            if gemini_result.get("success"):
+                gemini_analysis = gemini_result
+                print(f"🤖 GEMINI: Análisis contextual generado")
+            else:
+                gemini_analysis = gemini_result
+        
+        except Exception as e:
+            print(f"❌ Error en Gemini: {e}")
+            gemini_analysis = {
+                'success': False,
+                'explanation': 'Análisis contextual no disponible',
+                'patterns_detected': [],
+                'recommendation': 'Solicitar revisión manual'
+            }
+        
+        # 🔥 PASO 4: AUTO-ASIGNAR ANALISTA
         from django.contrib.auth import get_user_model
         User = get_user_model()
         
         try:
-            # Buscar el primer analista activo
             analyst = User.objects.filter(role='analyst', is_active=True).first()
-        except Exception as e:
-            print(f"⚠️ No se pudo asignar analista: {e}")
+        except Exception:
             analyst = None
         
-        # Guardar incidente con clasificación y asignación
+        # 🎯 PASO 5: GUARDAR
         incident = serializer.save(
             reported_by=self.request.user,
             severity=severity,
             confidence=confidence,
-            assigned_to=analyst
+            assigned_to=analyst,
+            virustotal_result=virustotal_result,
+            gemini_analysis=gemini_analysis
         )
         
-        print(f"✅ Incidente #{incident.id} creado:")
-        print(f"   Severidad: {severity} ({round(confidence*100)}%)")
-        print(f"   Asignado a: {analyst.username if analyst else 'Sin asignar'}")
+        print(f"\n✅ INCIDENTE #{incident.id} CREADO:")
+        print(f"   Severidad: {severity.upper()} ({round(confidence*100)}%)")
+        print(f"   VirusTotal: {'✅' if virustotal_result and virustotal_result.get('success') else '❌'}")
+        print(f"   Gemini: {'✅' if gemini_analysis and gemini_analysis.get('success') else '❌'}")
+        print(f"{'='*60}\n")
 
 
 class IncidentDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -262,15 +327,13 @@ class DashboardStatsView(APIView):
         user_role = user.role
         
         try:
-            # Obtener incidentes según rol
             if user_role == 'admin':
                 incidents = Incident.objects.all()
             elif user_role == 'analyst':
                 incidents = Incident.objects.filter(assigned_to=user)
-            else:  # employee
+            else:
                 incidents = Incident.objects.filter(reported_by=user)
             
-            # Estadísticas básicas
             stats = {
                 'role': user_role,
                 'total': incidents.count(),

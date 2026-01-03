@@ -391,3 +391,173 @@
     width: 100%;
   }
 }
+/* 🤖 ESTILOS PARA ANÁLISIS GEMINI */
+.gemini-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+
+.gemini-section h3 {
+  color: white;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.gemini-section h4 {
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.95rem;
+  margin-top: 15px;
+  margin-bottom: 10px;
+}
+
+.gemini-patterns ul {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0;
+}
+
+.gemini-patterns li {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 8px 12px;
+  margin: 5px 0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.gemini-patterns li:before {
+  content: "🔹 ";
+  margin-right: 8px;
+}
+
+.gemini-explanation {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 15px;
+  border-radius: 8px;
+  margin: 15px 0;
+}
+
+.gemini-explanation p {
+  line-height: 1.6;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.gemini-recommendation {
+  background: rgba(255, 215, 0, 0.2);
+  border-left: 4px solid #ffd700;
+  padding: 12px 15px;
+  border-radius: 6px;
+  margin-top: 15px;
+}
+
+.gemini-recommendation p {
+  margin: 5px 0 0 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+/* 👤 ESTILOS PARA VISTA SIMPLE (EMPLOYEE) */
+.simple-orientation {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 30px;
+  border-radius: 12px;
+  color: white;
+  margin-bottom: 20px;
+}
+
+.orientation-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.orientation-icon {
+  font-size: 2rem;
+}
+
+.severity-display {
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+  margin: 20px 0;
+  color: white;
+}
+
+.severity-label {
+  display: block;
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin-bottom: 8px;
+}
+
+.severity-value {
+  display: block;
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.confidence-indicator {
+  display: block;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.simple-explanation, .simple-recommendation {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 15px;
+  border-radius: 8px;
+  margin: 15px 0;
+}
+
+.simple-explanation h4, .simple-recommendation h4 {
+  margin-top: 0;
+  font-size: 1rem;
+  margin-bottom: 10px;
+}
+
+.simple-vt-alert {
+  display: flex;
+  gap: 12px;
+  background: rgba(220, 38, 38, 0.2);
+  border-left: 4px solid #dc2626;
+  padding: 12px 15px;
+  border-radius: 6px;
+  margin: 15px 0;
+}
+
+.alert-icon {
+  font-size: 1.5rem;
+}
+
+.simple-status {
+  display: flex;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 12px 15px;
+  border-radius: 6px;
+  margin-top: 15px;
+}
+
+.status-icon {
+  font-size: 1.5rem;
+}
+
+.simple-info {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.simple-info h4 {
+  margin-top: 0;
+  color: #667eea;
+}
+
+.simple-info p {
+  margin: 8px 0;
+  line-height: 1.6;
+}

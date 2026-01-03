@@ -1,3 +1,9 @@
+"""
+🚨 MODELOS DE INCIDENTES - TESIS CIBERSEGURIDAD
+Ryan Gallegos Mera - PUCESI
+Última actualización: 03 de Enero, 2026
+"""
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser, User
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -66,7 +72,7 @@ class Incident(models.Model):
     title = models.CharField(max_length=255, help_text="Título del incidente")
     description = models.TextField(help_text="Descripción detallada del incidente")
     
-    # 🔥 NUEVO: Campo para URL/Email reportado
+    # 🔥 Campo para URL/Email reportado
     url = models.URLField(
         max_length=500,
         blank=True,
@@ -168,6 +174,19 @@ class Incident(models.Model):
         help_text="IP destino del evento"
     )
     
+    # 🛡️ NUEVO: Resultado de VirusTotal
+    virustotal_result = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Resultado del análisis de VirusTotal en formato JSON"
+    )
+    
+    # 🤖 NUEVO: Análisis contextual de Gemini
+    gemini_analysis = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Análisis contextual generado por Gemini (explicación de patrones)"
+    )
     class Meta:
         ordering = ['-detected_at']
         verbose_name = "Incidente"

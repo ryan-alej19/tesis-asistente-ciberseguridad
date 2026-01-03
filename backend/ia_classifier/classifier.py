@@ -1,134 +1,251 @@
 """
-Clasificador de incidentes basado en reglas simples
-EXPLICABLE Y DEFENDIBLE PARA LA TESIS
+
+Clasificador de incidentes basado en reglas heurísticas
+IA EXPLICABLE Y DEFENDIBLE PARA TESIS ACADÉMICA
 
 Argumentación académica:
-- No usa machine learning complejo
-- Basado en palabras clave definidas por estándares (NIST, ISO 27035)
-- Resultado reproducible y auditable
+- NO usa Machine Learning ni modelos entrenados
+- Basado en palabras clave definidas por estándares (NIST SP 800-61, ISO 27035)
+- Sistema de scoring transparente y auditable
+- Cada decisión es explicable paso a paso
+- Apropiado para pequeñas empresas sin datasets históricos
 - Fácil de explicar en defensa oral
+
+LIMITACIONES RECONOCIDAS:
+- NO tiene precisión medida con datos reales
+- NO aprende de incidentes pasados
+- Requiere validación externa (VirusTotal, Gemini)
+- Confianza máxima limitada a 70% (no es caja negra)
 """
+from typing import Dict, Any, List, Tuple
+import re
+from datetime import datetime
 
 
 class IncidentClassifier:
     """
-    Clasificador de incidentes de seguridad basado en palabras clave.
-    Versión orientada a objetos compatible con views.py
+    Clasificador de incidentes de seguridad basado en reglas heurísticas.
+    
+    Estrategia:
+    1. Analiza palabras clave en la descripción del incidente
+    2. Asigna puntuación según severidad de palabras detectadas
+    3. Considera el tipo de incidente reportado
+    4. Retorna clasificación con confianza limitada (<70%)
+    
+    Uso académico:
+    - Orientación preliminar, NO veredicto final
+    - Complementado con VirusTotal para URLs
+    - Complementado con Gemini para análisis contextual
     """
     
     def __init__(self):
-        """Inicializa las palabras clave de clasificación"""
+        """Inicializa las palabras clave basadas en estándares de seguridad"""
         
         # ===== PALABRAS CLAVE POR SEVERIDAD =====
-        # Basadas en NIST SP 800-61 y estándares de seguridad
+        # Fuentes: NIST SP 800-61 Rev 2, ISO 27035, MITRE ATT&CK
         
         self.CRITICAL_KEYWORDS = [
-            'ransomware', 'malware', 'virus', 'breach', 'robo de datos',
-            'encriptado', 'crypto', 'botnet', 'ataque crítico', 'criptografía',
-            'exfiltración', 'datos sensibles', 'base de datos comprometida',
-            'ciberataque masivo', 'ataques dirigidos',
-            'backdoor', 'exploit', 'zero-day', 'vulnerabilidad crítica',
-            'administrador comprometido', 'privilegios elevados no autorizados',
+            # Malware avanzado
+            'ransomware', 'malware', 'virus', 'trojan', 'troyano', 'backdoor', 'puerta trasera',
+            # Compromiso de datos
+            'breach', 'robo de datos', 'robo datos', 'exfiltracion', 'exfiltración', 
+            'datos sensibles', 'base de datos comprometida', 'filtracion', 'filtración',
+            # Cifrado y bloqueo
+            'encriptado', 'cifrado malicioso', 'crypto', 'bloqueado', 'secuestro',
+            # Ataques dirigidos
+            'botnet', 'apt', 'ataque dirigido', 'ciberataque masivo', 'ataque avanzado',
+            # Vulnerabilidades críticas
+            'zero-day', 'zero day', 'vulnerabilidad critica', 'exploit', 'explotacion',
+            # Escalamiento de privilegios
+            'administrador comprometido', 'root comprometido', 'admin comprometido',
+            'privilegios elevados no autorizados', 'escalada de privilegios',
         ]
         
         self.HIGH_KEYWORDS = [
-            'hack', 'unauthorized', 'no autorizado', 'phishing', 'sospechoso',
-            'suspicious', 'login anómalo', 'acceso extraño', 'fuerza bruta',
-            'intento de ingreso', 'contraseña capturada', 'credential stuffing',
-            'privilege escalation', 'acceso no autorizado a datos',
-            'inyección sql', 'cross-site', 'xss', 'ddos', 'ataque de negación',
-            'modificación no autorizada', 'conexión sospechosa',
+            # Acceso no autorizado
+            'hack', 'hacking', 'hackeado', 'unauthorized', 'no autorizado', 'acceso no autorizado',
+            'acceso extraño', 'acceso extrano', 'login anomalo', 'sesion sospechosa', 'sesión sospechosa',
+            # Phishing
+            'phishing', 'suplantacion', 'suplantación', 'correo sospechoso', 'email sospechoso',
+            'enlace malicioso', 'link malicioso', 'adjunto sospechoso',
+            # Ataques de fuerza
+            'fuerza bruta', 'brute force', 'intento masivo', 'intentos fallidos multiples',
+            'credential stuffing', 'password spraying',
+            # Inyecciones y XSS
+            'inyeccion sql', 'inyección sql', 'sql injection', 'cross-site', 'xss',
+            'code injection', 'command injection',
+            # Denegación de servicio
+            'ddos', 'dos', 'denegacion de servicio', 'denegación de servicio', 'ataque de negacion',
+            'servicio caido', 'servicio caído',
+            # Modificaciones sospechosas
+            'modificacion no autorizada', 'modificación no autorizada', 'archivo modificado',
+            'configuracion cambiada', 'configuración cambiada', 'registro alterado',
         ]
         
         self.MEDIUM_KEYWORDS = [
-            'error', 'fallo', 'incorrecto', 'warning', 'advertencia',
-            'timeout', 'conexión fallida', 'falla de sistema',
-            'configuración errónea', 'acceso incorrecto',
-            'intento fallido', 'cuenta bloqueada',
+            # Errores de configuración
+            'error', 'fallo', 'incorrecto', 'mal configurado',
+            'configuracion erronea', 'configuración errónea', 'permiso incorrecto',
+            # Advertencias del sistema
+            'warning', 'advertencia', 'alerta', 'aviso',
+            # Problemas de conectividad
+            'timeout', 'conexion fallida', 'conexión fallida', 'conexion perdida', 'conexión perdida',
+            'red lenta', 'servicio no disponible', 'servicio lento',
+            # Bloqueos de seguridad
+            'cuenta bloqueada', 'intento fallido', 'acceso denegado',
+            'sesion expirada', 'sesión expirada', 'token invalido', 'token inválido',
         ]
         
-        # ===== TIPO DE INCIDENTE =====
+        # ===== CLASIFICACIÓN POR TIPO DE INCIDENTE =====
+        # Formato: (tipo, severidad_base, confianza_base)
         self.INCIDENT_TYPE_SEVERITY = {
-            'malware': ('critical', 0.85),
-            'ransomware': ('critical', 0.90),
-            'phishing': ('high', 0.75),
-            'acceso_sospechoso': ('high', 0.70),
-            'ddos': ('high', 0.80),
-            'robo_datos': ('critical', 0.85),
-            'error_configuracion': ('medium', 0.50),
-            'otro': ('medium', 0.50),
+            'malware': ('critical', 0.70),
+            'ransomware': ('critical', 0.75),
+            'robo_datos': ('critical', 0.75),
+            'robo_de_datos': ('critical', 0.75),
+            'backdoor': ('critical', 0.70),
+            'exfiltracion': ('critical', 0.72),
+            'exfiltración': ('critical', 0.72),
+            
+            'phishing': ('high', 0.65),
+            'acceso_sospechoso': ('high', 0.60),
+            'acceso_no_autorizado': ('high', 0.65),
+            'ddos': ('high', 0.70),
+            'inyeccion_sql': ('high', 0.65),
+            'inyección_sql': ('high', 0.65),
+            'xss': ('high', 0.60),
+            'fuerza_bruta': ('high', 0.62),
+            
+            'error_configuracion': ('medium', 0.45),
+            'error_de_configuracion': ('medium', 0.45),
+            'fallo_sistema': ('medium', 0.40),
+            'cuenta_bloqueada': ('medium', 0.40),
+            'timeout': ('medium', 0.35),
+            
+            'otro': ('low', 0.30),
+            'desconocido': ('low', 0.25),
         }
     
-    def classify(self, description, threat_type='otro'):
+    def _normalize_text(self, text: str) -> str:
+        """
+        Normaliza el texto para comparación (minúsculas, sin acentos).
+        
+        Args:
+            text (str): Texto a normalizar
+        
+        Returns:
+            str: Texto normalizado
+        """
+        text = text.lower()
+        # Eliminar acentos comunes en español
+        replacements = {
+            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+            'ñ': 'n', 'ü': 'u'
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        return text
+    
+    def classify(self, description: str, threat_type: str = 'otro') -> tuple:
         """
         Clasifica un incidente de seguridad en base a su descripción.
         
         Args:
-            description (str): Descripción del incidente
-            threat_type (str): Tipo de amenaza (phishing, malware, ransomware, etc.)
+            description (str): Descripción del incidente en lenguaje natural
+            threat_type (str): Tipo de amenaza (opcional, default='otro')
         
         Returns:
             tuple: (severity, confidence)
-            - severity: 'low', 'medium', 'high', 'critical'
-            - confidence: float entre 0.0 y 1.0
+            - severity: 'low' | 'medium' | 'high' | 'critical'
+            - confidence: float entre 0.0 y 0.70 (máximo)
         
-        Lógica:
-        1. Busca palabras clave que indiquen severidad
-        2. Asigna puntuación según cantidad y tipo de palabras
-        3. Considera el tipo de incidente si fue especificado
-        4. Retorna clasificación defendible
+        Ejemplo:
+            >>> classifier = IncidentClassifier()
+            >>> severity, confidence = classifier.classify(
+                    "Recibí un correo con un enlace sospechoso de PayPal",
+                    "phishing"
+                )
+            >>> print(severity, confidence)
+            ('high', 0.65)
+        
+        Nota académica:
+            - La confianza NUNCA supera 0.70 (70%)
+            - Sistema de reglas NO aprende de datos
+            - Requiere validación con VirusTotal/Gemini
         """
         
-        # ===== NORMALIZACIÓN DE TEXTO =====
-        text = description.lower()
-        text = text.replace('á', 'a').replace('é', 'e').replace('í', 'i')
-        text = text.replace('ó', 'o').replace('ú', 'u').replace('ñ', 'n')
+        # Validación de entrada
+        if not description or len(description.strip()) < 5:
+            return ('low', 0.20)  # Descripción insuficiente
         
-        # ===== CONTAR COINCIDENCIAS =====
+        # Normalización de texto
+        text = self._normalize_text(description)
+        threat_type_lower = self._normalize_text(threat_type) if threat_type else 'otro'
+        
+        # ===== CONTEO DE COINCIDENCIAS =====
         critical_matches = sum(1 for word in self.CRITICAL_KEYWORDS if word in text)
         high_matches = sum(1 for word in self.HIGH_KEYWORDS if word in text)
         medium_matches = sum(1 for word in self.MEDIUM_KEYWORDS if word in text)
         
-        # ===== LÓGICA DE DECISIÓN =====
+        # ===== LÓGICA DE DECISIÓN (TRANSPARENTE) =====
         
-        # Normalizar tipo de incidente
-        threat_type_lower = threat_type.lower() if threat_type else ''
-        
-        # REGLA 1: Si hay coincidencias críticas
+        # REGLA 1: Palabras críticas detectadas (máxima prioridad)
         if critical_matches > 0:
-            confidence = min(0.95, 0.70 + critical_matches * 0.10)
-            return ('critical', confidence)
+            # Aumenta confianza por cada palabra crítica (máx 70%)
+            confidence = min(0.70, 0.55 + (critical_matches * 0.05))
+            return ('critical', round(confidence, 2))
         
-        # REGLA 2: Si hay coincidencias altas o el tipo es peligroso
-        if high_matches > 0 or 'phishing' in text or 'phishing' in threat_type_lower:
-            confidence = min(0.90, 0.60 + high_matches * 0.10)
-            return ('high', confidence)
-        
-        # REGLA 3: Si el tipo de incidente indica algo crítico
+        # REGLA 2: Tipo de incidente indica criticidad
         if threat_type_lower in self.INCIDENT_TYPE_SEVERITY:
             severity, confidence = self.INCIDENT_TYPE_SEVERITY[threat_type_lower]
-            if severity in ['critical', 'high']:
+            if severity == 'critical':
                 return (severity, confidence)
         
-        # REGLA 4: Si hay coincidencias medianas
-        if medium_matches > 0:
-            confidence = min(0.75, 0.40 + medium_matches * 0.10)
-            return ('medium', confidence)
+        # REGLA 3: Palabras de alta severidad
+        if high_matches > 0:
+            confidence = min(0.70, 0.50 + (high_matches * 0.04))
+            return ('high', round(confidence, 2))
         
-        # REGLA 5: Por defecto, bajo riesgo
-        return ('low', 0.30)
+        # REGLA 4: Tipo de incidente indica alta severidad
+        if threat_type_lower in self.INCIDENT_TYPE_SEVERITY:
+            severity, confidence = self.INCIDENT_TYPE_SEVERITY[threat_type_lower]
+            if severity == 'high':
+                return (severity, confidence)
+        
+        # REGLA 5: Palabras de severidad media
+        if medium_matches > 0:
+            confidence = min(0.70, 0.35 + (medium_matches * 0.03))
+            return ('medium', round(confidence, 2))
+        
+        # REGLA 6: Tipo de incidente indica severidad media
+        if threat_type_lower in self.INCIDENT_TYPE_SEVERITY:
+            severity, confidence = self.INCIDENT_TYPE_SEVERITY[threat_type_lower]
+            if severity == 'medium':
+                return (severity, confidence)
+        
+        # REGLA 7: Por defecto, bajo riesgo con confianza mínima
+        return ('low', 0.25)
     
-    def get_explanation(self, severity, confidence):
+    def get_explanation(self, severity: str, confidence: float) -> Dict[str, Any]:
         """
-        Retorna una explicación en español de por qué se clasificó así.
-        Útil para el dashboard y defensa oral.
+        Genera explicación en español de la clasificación.
+        Útil para dashboard y defensa oral.
         
         Args:
             severity (str): Severidad calculada
             confidence (float): Confianza de la clasificación
         
         Returns:
-            dict: Diccionario con información de la clasificación
+            dict: Explicación estructurada con severidad, confianza y descripción
+        
+        Ejemplo:
+            >>> explanation = classifier.get_explanation('high', 0.65)
+            >>> print(explanation)
+            {
+                'severity': 'Alto - Acción inmediata necesaria',
+                'confidence': '65%',
+                'description': 'Incidente clasificado como Alto con 65% de confianza.'
+            }
         """
         severity_text = {
             'low': 'Bajo - Riesgo mínimo',
@@ -142,16 +259,30 @@ class IncidentClassifier:
         return {
             'severity': severity_text.get(severity, 'Desconocido'),
             'confidence': confidence_pct,
-            'description': f"Incidente clasificado como {severity_text.get(severity)} con {confidence_pct} de confianza."
+            'confidence_note': 'Confianza limitada (sistema de reglas heurísticas)',
+            'description': (
+                f"Incidente clasificado como {severity_text.get(severity, 'Desconocido')} "
+                f"con {confidence_pct} de confianza basado en reglas heurísticas."
+            ),
+            'recommendation': (
+                'Se recomienda validar con VirusTotal (URLs) o Gemini (contexto) '
+                'para confirmar la clasificación inicial.'
+            )
         }
 
 
-# ===== FUNCIONES LEGACY (para compatibilidad con código antiguo) =====
+# ===== FUNCIONES LEGACY (compatibilidad con código antiguo) =====
 
-def classify_incident(title, description, incident_type=''):
+
+def classify_incident(title: str, description: str, incident_type: str = '') -> tuple:
     """
     Función legacy que usa la clase IncidentClassifier internamente.
-    Se mantiene para compatibilidad con código antiguo.
+    Se mantiene para compatibilidad con código existente.
+    
+    Args:
+        title (str): Título del incidente (no usado actualmente)
+        description (str): Descripción del incidente
+        incident_type (str): Tipo de incidente
     
     Returns:
         tuple: (severity, confidence, threat_type)
@@ -159,7 +290,7 @@ def classify_incident(title, description, incident_type=''):
     classifier = IncidentClassifier()
     severity, confidence = classifier.classify(description, incident_type)
     
-    # Determinar tipo de amenaza basado en severidad
+    # Mapeo de severidad a tipo de amenaza (para retrocompatibilidad)
     threat_type_map = {
         'critical': 'Malware/Ransomware/Breach',
         'high': 'Phishing/Unauthorized Access',
@@ -171,10 +302,18 @@ def classify_incident(title, description, incident_type=''):
     return (severity, confidence, threat_type)
 
 
-def get_classification_explanation(severity, confidence, threat_type):
+def get_classification_explanation(severity: str, confidence: float, threat_type: str) -> Dict[str, Any]:
     """
     Función legacy que usa la clase IncidentClassifier internamente.
-    Se mantiene para compatibilidad con código antiguo.
+    Se mantiene para compatibilidad con código existente.
+    
+    Args:
+        severity (str): Severidad del incidente
+        confidence (float): Nivel de confianza
+        threat_type (str): Tipo de amenaza
+    
+    Returns:
+        dict: Explicación con severidad, confianza y tipo de amenaza
     """
     classifier = IncidentClassifier()
     explanation = classifier.get_explanation(severity, confidence)

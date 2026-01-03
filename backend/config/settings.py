@@ -4,11 +4,19 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
+from dotenv import load_dotenv
+
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# 🔥 CARGAR VARIABLES DE ENTORNO DESDE .env
+load_dotenv(os.path.join(BASE_DIR, '.env'))
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-tu-clave-secreta-segura-aqui-1234567890'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-fallback-key')
 
 # Development mode (solo para probar local)
 DEBUG = True
@@ -199,3 +207,11 @@ LOGGING = {
         'level': 'INFO',
     },
 }
+# ==========================================
+# 🛡️ VIRUSTOTAL API CONFIGURATION
+# ==========================================
+VIRUSTOTAL_API_KEY = '490f40a88479a02a482c2d1bb35c5391190d98caaa702eaacdac055a38f63037'
+# ==========================================
+# 🤖 GEMINI API CONFIGURATION
+# ==========================================
+GEMINI_API_KEY = 'AIzaSyA0YAkH7llL-7IXhPA3QGtHyBMisHu9MGA'

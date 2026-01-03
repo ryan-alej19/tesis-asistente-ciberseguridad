@@ -116,3 +116,89 @@ button:disabled {
   color: #10b981;
   font-weight: bold;
 }
+/* 🛡️ ESTILOS VIRUSTOTAL */
+.virustotal-section {
+  margin: 20px 0;
+  padding: 20px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+}
+
+.virustotal-section h3 {
+  color: white;
+  margin-bottom: 15px;
+  font-size: 1.2rem;
+}
+
+.vt-results {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.vt-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.vt-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.vt-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.vt-value {
+  color: white;
+  font-size: 1.3rem;
+  font-weight: bold;
+}
+
+.vt-value.critical { color: #fca5a5; }
+.vt-value.high { color: #fdba74; }
+.vt-value.medium { color: #fde047; }
+.vt-value.safe { color: #86efac; }
+
+.vt-link {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 10px 20px;
+  background: white;
+  color: #1e3a8a;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.vt-link:hover {
+  background: #f0f9ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.vt-error {
+  background: rgba(220, 38, 38, 0.2);
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 4px solid #dc2626;
+}
+
+.vt-error p {
+  color: white;
+  font-weight: 600;
+  margin: 0 0 5px 0;
+}
+
+.error-message {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+}

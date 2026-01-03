@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import IncidentAnalysisModal from '../components/IncidentAnalysisModal';
 import '../styles/Dashboard.css';
 
 function EmployeeDashboard() {
@@ -14,10 +15,9 @@ function EmployeeDashboard() {
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [expandedId, setExpandedId] = useState(null);
   const [myIncidents, setMyIncidents] = useState([]);
+  const [selectedIncident, setSelectedIncident] = useState(null);
 
-  // Cargar mis incidentes al montar el componente
   useEffect(() => {
     fetchMyIncidents();
   }, []);
@@ -58,12 +58,11 @@ function EmployeeDashboard() {
     try {
       const token = localStorage.getItem('access_token');
       
-      // 🔥 CREAR INCIDENTE REAL EN LA BD
       const response = await axios.post('http://localhost:8000/api/incidents/', {
-        title: `Reporte: ${form.url}`,  // ← CAMBIADO: Usa la URL en el título también
+        title: `Reporte: ${form.url}`,
         description: form.description || `Usuario reportó: ${form.url}`,
         threat_type: 'phishing',
-        url: form.url,  // ← Campo URL incluido
+        url: form.url,
       }, {
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -73,13 +72,9 @@ function EmployeeDashboard() {
       
       console.log('✅ Incidente creado:', response.data);
       
-      // Mostrar mensaje de éxito
       setSuccess(true);
-      
-      // Limpiar formulario
       setForm({ url: '', description: '' });
       
-      // 🔥 RECARGAR LA LISTA DESPUÉS DE 800ms
       setTimeout(async () => {
         await fetchMyIncidents();
         setSuccess(false);
@@ -91,6 +86,10 @@ function EmployeeDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAnalyze = (incident) => {
+    setSelectedIncident(incident);
   };
 
   return (
@@ -113,7 +112,7 @@ function EmployeeDashboard() {
         </div>
       </div>
 
-      {/* FORMULARIO SIMPLIFICADO */}
+      {/* FORMULARIO */}
       <div className="employee-report-section">
         <h2 className="section-title">📝 Reportar un Correo o Enlace Sospechoso</h2>
         
@@ -165,7 +164,7 @@ function EmployeeDashboard() {
         </form>
       </div>
 
-      {/* MIS REPORTES - CON URL REAL */}
+      {/* MIS REPORTES */}
       <div className="my-incidents-section">
         <h2 className="section-title">📋 Mis Reportes</h2>
         {myIncidents.length === 0 ? (
@@ -186,83 +185,52 @@ function EmployeeDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {myIncidents.map(incident => {
-                  console.log('🔍 Incident data:', incident);  // Debug
-                  return (
-                    <React.Fragment key={incident.id}>
-                      <tr>
-                        <td>{new Date(incident.created_at).toLocaleDateString('es-ES')}</td>
-                        <td className="url-cell">
-                          {/* 🔥 MOSTRAR URL SI EXISTE, SI NO, MOSTRAR TÍTULO */}
-                          {incident.url ? (
-                            <span title={incident.url}>{incident.url}</span>
-                          ) : (
-                            <span className="no-url">{incident.title}</span>
-                          )}
-                        </td>
-                        <td>
-                          <span className={`badge badge-${incident.severity}`}>
-                            {incident.severity.toUpperCase()}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`status status-${incident.status.replace('_', '-')}`}>
-                            {incident.status === 'new' ? 'En revisión' : 
-                             incident.status === 'in_progress' ? 'En progreso' :
-                             incident.status === 'resolved' ? 'Resuelto' : 'Crítico'}
-                          </span>
-                        </td>
-                        <td className="details-cell">
-                          <button 
-                            className="btn-details"
-                            onClick={() => setExpandedId(expandedId === incident.id ? null : incident.id)}
-                            title="Ver detalles"
-                          >
-                            ⋮
-                          </button>
-                        </td>
-                      </tr>
-                      {expandedId === incident.id && (
-                        <tr className="expanded-row">
-                          <td colSpan="5">
-                            <div className="incident-details">
-                              {incident.url && (
-                                <>
-                                  <p><strong>🔗 URL Reportada:</strong></p>
-                                  <p className="url-box">{incident.url}</p>
-                                  <hr />
-                                </>
-                              )}
-                              <p><strong>📝 Tu Descripción:</strong></p>
-                              <p>{incident.description || 'Sin descripción adicional'}</p>
-                              <hr />
-                              <p><strong>🤖 Análisis IA:</strong></p>
-                              <p>• Confianza: <strong>{Math.round(incident.confidence * 100)}%</strong></p>
-                              <p>• Tipo de Amenaza: <strong>{incident.threat_type}</strong></p>
-                              {incident.severity === 'critical' && (
-                                <p className="rec-critical">❌ <strong>NO HACER CLIC</strong> - Amenaza crítica detectada</p>
-                              )}
-                              {incident.severity === 'high' && (
-                                <p className="rec-high">⚠️ <strong>PRECAUCIÓN</strong> - Amenaza alta detectada</p>
-                              )}
-                              {incident.severity === 'medium' && (
-                                <p className="rec-medium">⚡ <strong>REVISAR</strong> - Amenaza media detectada</p>
-                              )}
-                              {incident.severity === 'low' && (
-                                <p className="rec-low">✅ <strong>BAJO RIESGO</strong> - Parece seguro</p>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
+                {myIncidents.map(incident => (
+                  <tr key={incident.id}>
+                    <td>{new Date(incident.created_at).toLocaleDateString('es-ES')}</td>
+                    <td className="url-cell">
+                      {incident.url ? (
+                        <span title={incident.url}>{incident.url}</span>
+                      ) : (
+                        <span className="no-url">{incident.title}</span>
                       )}
-                    </React.Fragment>
-                  );
-                })}
+                    </td>
+                    <td>
+                      <span className={`badge badge-${incident.severity}`}>
+                        {incident.severity.toUpperCase()}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`status status-${incident.status.replace('_', '-')}`}>
+                        {incident.status === 'new' ? 'En revisión' : 
+                         incident.status === 'in_progress' ? 'En progreso' :
+                         incident.status === 'resolved' ? 'Resuelto' : 'Crítico'}
+                      </span>
+                    </td>
+                    <td className="details-cell">
+                      <button 
+                        className="btn-analyze"
+                        onClick={() => handleAnalyze(incident)}
+                      >
+                        🔍 Analizar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {/* MODAL DE ANÁLISIS */}
+      {selectedIncident && (
+        <IncidentAnalysisModal 
+          incident={selectedIncident}
+          onClose={() => setSelectedIncident(null)}
+          userRole="employee"
+        />
+      )}
     </div>
   );
 }

@@ -51,13 +51,25 @@ function AnalystDashboard() {
     setSelectedIncident(incident);
   };
 
-  const handleCloseModal = () => {
-    setSelectedIncident(null);
-  };
-
-  const handleUpdate = () => {
-    fetchIncidents();
-    fetchStats();
+  const handleIncidentStatusChange = async (incidentId, newStatus, notes) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      await axios.patch(
+        `http://localhost:8000/api/incidents/${incidentId}/`,
+        { status: newStatus, notes: notes },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Recargar datos
+      await fetchIncidents();
+      await fetchStats();
+      setSelectedIncident(null);
+      
+      alert('✅ Estado actualizado correctamente');
+    } catch (err) {
+      console.error('Error actualizando estado:', err);
+      alert('Error al actualizar: ' + (err.response?.data?.error || err.message));
+    }
   };
 
   const handleLogout = () => {
@@ -217,8 +229,9 @@ function AnalystDashboard() {
       {selectedIncident && (
         <IncidentAnalysisModal 
           incident={selectedIncident}
-          onClose={handleCloseModal}
-          onUpdate={handleUpdate}
+          onClose={() => setSelectedIncident(null)}
+          onStatusChange={handleIncidentStatusChange}
+          userRole="analyst"
         />
       )}
     </div>
