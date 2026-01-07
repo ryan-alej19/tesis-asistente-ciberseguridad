@@ -183,6 +183,14 @@ tesis-asistente-ciberseguridad/
 
 ---
 
+## 🏛️ Arquitectura Detallada
+
+Para una descripción más detallada de la arquitectura de cada componente, consulta la siguiente documentación:
+
+*   **[Documentación de Arquitectura](./docs/README.md)**
+
+---
+
 ## 📚 Documentación Actualizada (29 de Diciembre)
 
 ### 📋 Documentos disponibles:
