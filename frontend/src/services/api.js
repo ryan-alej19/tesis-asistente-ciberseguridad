@@ -6,12 +6,14 @@
 
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/api';
+const API_URL = process.env.REACT_APP_API_URL
+  ? `${process.env.REACT_APP_API_URL}/api`
+  : 'http://127.0.0.1:8000/api';
 
 // Configurar interceptor para agregar token a todas las peticiones
 axios.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('access_token'); // Corrección: usar 'access_token' consistente con AuthContext
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -22,19 +24,44 @@ axios.interceptors.request.use(
   }
 );
 
+// Interceptor de respuesta para manejar expiración de sesión (401)
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Token expirado o inválido
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user');
+
+      // Redirigir al login si no estamos ya allí
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // ========================================
 // 🔐 AUTENTICACIÓN
 // ========================================
 
-export const login = async (email, password) => {
+export const login = async (username, password) => {
   try {
     const response = await axios.post(`${API_URL}/auth/login/`, {
-      email,
+      username,
       password
     });
-    return response.data;
+    // Guardar token y usuario en localStorage si el login es exitoso
+    if (response.data.access) {
+      localStorage.setItem('token', response.data.access);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+    }
+    return { success: true, data: response.data };
   } catch (error) {
-    throw error.response?.data || { error: 'Error al iniciar sesión' };
+    console.error("Login error:", error);
+    return { success: false, error: error.response?.data?.error || 'Error al iniciar sesión' };
   }
 };
 
@@ -53,11 +80,11 @@ export const register = async (userData) => {
 
 export const createIncident = async (incidentData) => {
   try {
-    console.log('📤 Enviando incidente:', incidentData);
-    
-    const response = await axios.post(`${API_URL}/incidents/create/`, incidentData);
-    
-    console.log('✅ Respuesta recibida:', response.data);
+
+
+    const response = await axios.post(`${API_URL}/incidents/create`, incidentData);
+
+
     return response.data;
   } catch (error) {
     console.error('❌ Error al crear incidente:', error);

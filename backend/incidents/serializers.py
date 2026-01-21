@@ -1,7 +1,7 @@
 """
-🚨 SERIALIZERS DE INCIDENTES - TESIS CIBERSEGURIDAD
+SERIALIZERS DE INCIDENTES - TESIS CIBERSEGURIDAD
 Ryan Gallegos Mera - PUCESI
-Última actualización: 03 de Enero, 2026
+Última actualización: 07 de Enero, 2026
 """
 
 from rest_framework import serializers
@@ -30,10 +30,10 @@ class IncidentSerializer(serializers.ModelSerializer):
     assigned_to_email = serializers.SerializerMethodField()
     reported_url = serializers.CharField(source='url', read_only=True, allow_null=True, allow_blank=True)
     
-    # 🛡️ VirusTotal
+    # VirusTotal
     virustotal_result = serializers.JSONField(required=False, allow_null=True)
     
-    # 🤖 NUEVO: Gemini
+    # Gemini
     gemini_analysis = serializers.JSONField(required=False, allow_null=True)
 
     class Meta:
@@ -61,7 +61,7 @@ class IncidentSerializer(serializers.ModelSerializer):
             'notes',
             'log_source',
             'virustotal_result',
-            'gemini_analysis',  # 🤖 NUEVO
+            'gemini_analysis',
         ]
         read_only_fields = [
             'id',
@@ -72,7 +72,7 @@ class IncidentSerializer(serializers.ModelSerializer):
             'severity',
             'confidence',
             'virustotal_result',
-            'gemini_analysis',  # 🤖 NUEVO
+            'gemini_analysis',
         ]
     
     def get_reported_by_username(self, obj):
@@ -109,13 +109,13 @@ class IncidentListSerializer(serializers.ModelSerializer):
             'reported_by_username',
             'assigned_to_username',
             'virustotal_result',
-            'gemini_analysis',  # 🤖 NUEVO
+            'gemini_analysis',
         ]
         read_only_fields = [
             'id',
             'created_at',
             'virustotal_result',
-            'gemini_analysis',  # 🤖 NUEVO
+            'gemini_analysis',
         ]
     
     def get_reported_by_username(self, obj):

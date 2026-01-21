@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # Servicio Backend (Django)
+  backend:
+    build: ./backend
+    container_name: tesis_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - sqlite_data:/app/db_data
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=django-insecure-tesis-academic-key
+      # Las API KEYS deben estar en un archivo .env local
+    env_file:
+      - ./backend/.env
+    networks:
+      - app-network
+
+  # Servicio Frontend (React + Nginx)
+  frontend:
+    build: ./frontend
+    container_name: tesis_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+volumes:
+  sqlite_data:
+
+
+networks:
+  app-network:
+    driver: bridge

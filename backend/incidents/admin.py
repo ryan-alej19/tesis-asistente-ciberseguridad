@@ -93,21 +93,21 @@ class IncidentAdmin(admin.ModelAdmin):
         updated = queryset.update(status='resolved', resolved_at=timezone.now())
         self.message_user(request, f'{updated} incidentes marcados como resueltos.')
     
-    mark_as_resolved.short_description = '✅ Marcar como Resuelto'
+    mark_as_resolved.short_description = 'Marcar como Resuelto'
     
     def mark_as_false_positive(self, request, queryset):
         """Acción para marcar como falsa alarma"""
         updated = queryset.update(status='false_positive')
         self.message_user(request, f'{updated} incidentes marcados como falsas alarmas.')
     
-    mark_as_false_positive.short_description = '❌ Marcar como Falsa Alarma'
+    mark_as_false_positive.short_description = 'Marcar como Falsa Alarma'
     
     def mark_as_critical(self, request, queryset):
         """Acción para marcar como crítico"""
         updated = queryset.update(severity='critical', status='under_review')
         self.message_user(request, f'{updated} incidentes marcados como críticos.')
     
-    mark_as_critical.short_description = '🚨 Marcar como Crítico'
+    mark_as_critical.short_description = 'Marcar como Crítico'
     
     class Media:
         css = {

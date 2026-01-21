@@ -1,7 +1,5 @@
 """
-🤖 SERVICIO DE GEMINI - ANÁLISIS CONTEXTUAL
-Ryan Gallegos Mera - PUCESI
-Última actualización: 03 de Enero, 2026
+SERVICIO DE GEMINI - ANÁLISIS CONTEXTUAL
 """
 
 import os
@@ -13,7 +11,7 @@ load_dotenv()
 
 class GeminiService:
     """
-    🤖 Servicio para análisis contextual de incidentes usando Gemini 1.5 Flash
+    Servicio para análisis contextual de incidentes usando Gemini 1.5 Flash
     """
     
     def __init__(self):
@@ -23,158 +21,127 @@ class GeminiService:
         api_key = os.getenv('GEMINI_API_KEY')
         
         if not api_key:
-            raise ValueError("❌ GEMINI_API_KEY no está configurada en .env")
+            raise ValueError(" GEMINI_API_KEY no está configurada en .env")
         
         genai.configure(api_key=api_key)
         
-        # 🔥 CAMBIADO A GEMINI 1.5 FLASH (MÁS ESTABLE Y MAYOR CUOTA)
+        # CAMBIADO A GEMINI 1.5 FLASH (MÁS RÁPIDO Y COMPATIBLE)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
         
-        print("✅ GeminiService inicializado correctamente con Gemini 1.5 Flash")
+        print("GeminiService inicializado correctamente con Gemini 1.5 Flash")
 
 
     def analyze_incident(self, url, description, threat_type, severity):
         """
-        🔍 Analiza un incidente de ciberseguridad usando Gemini
-        
-        Args:
-            url (str): URL reportada (puede ser vacía)
-            description (str): Descripción del incidente
-            threat_type (str): Tipo de amenaza (phishing, malware, etc.)
-            severity (str): Nivel de severidad detectado por IA local
-        
-        Returns:
-            dict: Análisis contextual del incidente
+        Analiza un incidente de ciberseguridad usando Gemini para determinar riesgo y contexto.
         """
         try:
-            print(f"\n🤖 GEMINI: Iniciando análisis...")
+            print(f"\n[GEMINI] Iniciando análisis contextual...")
             print(f"   - URL: {url or 'No especificada'}")
-            print(f"   - Tipo: {threat_type}")
-            print(f"   - Severidad: {severity}")
+            print(f"   - Tipo reportado: {threat_type}")
             
-            # 🎯 PROMPT OPTIMIZADO PARA TESIS
             prompt = f"""
-Eres un asistente de ciberseguridad para pequeñas empresas.
+Actúa como un experto Analista de Ciberseguridad (SOC Nivel 2).
+Analiza el siguiente reporte de incidente:
 
-**CONTEXTO DEL INCIDENTE:**
-- Tipo de amenaza: {threat_type}
-- Severidad detectada: {severity}
-- URL reportada: {url or "No proporcionada"}
-- Descripción: {description or "Sin descripción"}
+DATOS DEL INCIDENTE:
+- Tipo Reportado: {threat_type}
+- Descripción: {description or "No proporcionada"}
+- URL sospechosa: {url or "N/A"}
 
-**TU TAREA:**
-Proporciona un análisis breve (máximo 200 palabras) que incluya:
+TAREA:
+1. Evalúa la SEVERIDAD y CONFIANZA del incidente basándote en indicadores técnicos y heurística.
+2. Explica técnicamente el por qué de la evaluación.
+3. Recomienda acciones de contención inmediatas.
 
-1. **Explicación simple** de por qué es {severity} (en español sencillo)
-2. **Patrones detectados** (máximo 3 puntos clave)
-3. **Recomendación práctica** inmediata para el usuario
-
-**IMPORTANTE:**
-- Usa lenguaje NO técnico (para pequeñas empresas)
-- Sé directo y práctico
-- NO inventes datos técnicos
-- Si no estás seguro, di "requiere revisión manual"
-
-**FORMATO DE RESPUESTA:**
-Explicación: [tu explicación]
-Patrones: [lista de 2-3 patrones]
-Recomendación: [acción concreta]
+FORMATO DE RESPUESTA REQUERIDO (Estricto):
+Severidad: [Bajo/Medio/Alto/Crítico]
+Confianza: [0-100]
+Explicación: [Análisis técnico conciso, máximo 3 líneas]
+Patrones: [Lista de IoCs o comportamientos observados, separados por comas]
+Recomendación: [Acción técnica inmediata]
 """
             
-            # 🚀 GENERAR RESPUESTA
             response = self.model.generate_content(prompt)
             
             if not response or not response.text:
-                raise Exception("Gemini no retornó contenido válido")
+                raise Exception("Respuesta vacía del proveedor de IA")
             
             analysis_text = response.text.strip()
             
-            # 📝 PARSEAR RESPUESTA
+            # Parsear respuesta estructurada
             result = self._parse_gemini_response(analysis_text)
             
-            print(f"✅ GEMINI: Análisis completado exitosamente")
+            print(f"[GEMINI] Análisis completado. Riesgo detectado: {result.get('risk_level', 'N/A')}")
             
             return {
                 'success': True,
+                'risk_level': result.get('risk_level', 'Medio'),
+                'confidence': result.get('confidence', 0.5), # 0.0 - 1.0
                 'explanation': result.get('explanation', analysis_text),
                 'patterns_detected': result.get('patterns', []),
-                'recommendation': result.get('recommendation', 'Solicitar revisión del equipo de seguridad'),
+                'recommendation': result.get('recommendation', 'Revisión manual requerida'),
                 'raw_analysis': analysis_text
             }
         
         except Exception as e:
             error_msg = str(e)
-            print(f"❌ ERROR en GeminiService.analyze_incident: {error_msg}")
+            print(f"[ERROR] Fallo en GeminiService: {error_msg}")
             
+            # Fallback seguro para cualquier error (no bloquear guardado)
             return {
-                'success': False,
-                'explanation': 'Análisis contextual no disponible temporalmente',
-                'patterns_detected': [],
-                'recommendation': 'El incidente ha sido registrado y será revisado por el equipo de seguridad',
-                'error': error_msg
+                'success': True, # Decimos True para que el frontend muestre el resultado fallback
+                'risk_level': 'Medio',
+                'confidence': 0.0,
+                'explanation': f"El servicio de IA no estuvo disponible: {error_msg}. Se requiere revisión manual.",
+                'patterns_detected': ["Error de servicio"],
+                'recommendation': "Revisar logs del sistema.",
+                'raw_analysis': "Service Error",
             }
-
 
     def _parse_gemini_response(self, text):
         """
-        📝 Parsea la respuesta de Gemini en formato estructurado
-        
-        Args:
-            text (str): Texto de respuesta de Gemini
-        
-        Returns:
-            dict: Datos estructurados
+        Parsea la respuesta de texto estructurado a diccionario.
         """
+        result = {
+            'risk_level': 'Medio',
+            'confidence': 0.5,
+            'explanation': '',
+            'patterns': [],
+            'recommendation': ''
+        }
+        
         try:
             lines = text.split('\n')
-            result = {
-                'explanation': '',
-                'patterns': [],
-                'recommendation': ''
-            }
-            
-            current_section = None
-            
             for line in lines:
                 line = line.strip()
+                if not line: continue
                 
-                if not line:
-                    continue
+                lower_line = line.lower()
                 
-                # Detectar secciones
-                if 'Explicación:' in line or 'Explicacion:' in line:
-                    current_section = 'explanation'
+                if line.startswith('Severidad:'):
+                    result['risk_level'] = line.split(':', 1)[1].strip()
+                elif line.startswith('Confianza:'):
+                    try:
+                        val = line.split(':', 1)[1].strip().replace('%', '')
+                        result['confidence'] = float(val) / 100.0
+                    except:
+                        result['confidence'] = 0.5
+                elif line.startswith('Explicación:'):
                     result['explanation'] = line.split(':', 1)[1].strip()
-                
-                elif 'Patrones:' in line:
-                    current_section = 'patterns'
-                    pattern_text = line.split(':', 1)[1].strip()
-                    if pattern_text:
-                        result['patterns'].append(pattern_text)
-                
-                elif 'Recomendación:' in line or 'Recomendacion:' in line:
-                    current_section = 'recommendation'
+                elif line.startswith('Patrones:'):
+                    patterns = line.split(':', 1)[1].strip()
+                    result['patterns'] = [p.strip() for p in patterns.split(',')]
+                elif line.startswith('Recomendación:'):
                     result['recommendation'] = line.split(':', 1)[1].strip()
-                
-                # Agregar contenido a la sección actual
-                elif current_section:
-                    if current_section == 'explanation' and not result['explanation']:
-                        result['explanation'] += line
-                    elif current_section == 'patterns' and (line.startswith('-') or line.startswith('•')):
-                        result['patterns'].append(line.lstrip('-•').strip())
-                    elif current_section == 'recommendation' and not result['recommendation']:
-                        result['recommendation'] += line
             
-            # Validar que al menos tengamos explicación
+            # Respaldo si el parsing falla parcialmente
             if not result['explanation']:
-                result['explanation'] = text[:300]  # Primeros 300 caracteres
-            
+                result['explanation'] = text[:200]
+                
             return result
-        
+            
         except Exception as e:
-            print(f"⚠️ Error parseando respuesta de Gemini: {e}")
-            return {
-                'explanation': text[:300] if text else "Análisis no disponible",
-                'patterns': [],
-                'recommendation': 'Revisión manual recomendada'
-            }
+            print(f"[WARNING] Error parseando respuesta LLM: {e}")
+            result['explanation'] = text[:200]
+            return result

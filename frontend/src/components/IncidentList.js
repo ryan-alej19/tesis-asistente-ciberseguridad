@@ -1,29 +1,36 @@
 /**
- * 📊 LISTA DE INCIDENTES - TESIS CIBERSEGURIDAD
+ * LISTA DE INCIDENTES - TESIS CIBERSEGURIDAD
  * Ryan Gallegos Mera - PUCESI
- * Última actualización: 04 de Enero, 2026
+ * Última actualización: 07 de Enero, 2026
  */
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import { getIncidents } from '../services/api';
+import { Icons } from './Icons';
+import IncidentAnalysisModal from './IncidentAnalysisModal';
 import './IncidentList.css';
 
 function IncidentList() {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('todos'); // filtro por estado
+  const [selectedIncident, setSelectedIncident] = useState(null); // Modal state
+  const navigate = useNavigate();
 
-  // 🔄 Cargar incidentes al montar el componente
+  // Cargar incidentes al montar el componente
   useEffect(() => {
     fetchIncidents();
   }, []);
 
-  // 📡 Obtener incidentes del backend
+  // Obtener incidentes del backend usando el servicio centralizado
   const fetchIncidents = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:8000/api/incidents/');
-      setIncidents(response.data);
+      const response = await getIncidents();
+      // El backend devuelve { success: true, incidents: [...] } o directamente [...]
+      const data = response.incidents || response;
+      setIncidents(Array.isArray(data) ? data : []);
       setLoading(false);
     } catch (error) {
       console.error('Error al cargar incidentes:', error);
@@ -31,34 +38,53 @@ function IncidentList() {
     }
   };
 
-  // 🎨 Obtener clase CSS según severidad
+  // Obtener clase CSS según severidad
   const getSeverityClass = (severity) => {
     const classes = {
       'Alta': 'severity-high',
       'Media': 'severity-medium',
-      'Baja': 'severity-low'
+      'Baja': 'severity-low',
+      'Crítico': 'severity-critical',
+      'critical': 'severity-critical',
+      'high': 'severity-high',
+      'medium': 'severity-medium',
+      'low': 'severity-low'
     };
-    return classes[severity] || 'severity-low';
+    return classes[severity] || classes[severity?.toLowerCase()] || 'severity-low';
   };
 
-  // 🎨 Obtener clase CSS según estado
+  // Obtener clase CSS según estado
   const getStatusClass = (status) => {
+    const normalized = status?.toLowerCase().replace(' ', '_');
     const classes = {
+      'nuevo': 'status-open',
       'abierto': 'status-open',
+      'open': 'status-open',
       'en_proceso': 'status-progress',
+      'in_progress': 'status-progress',
       'resuelto': 'status-resolved',
-      'cerrado': 'status-closed'
+      'resolved': 'status-resolved',
+      'cerrado': 'status-closed',
+      'closed': 'status-closed'
     };
-    return classes[status] || 'status-open';
+    return classes[normalized] || 'status-open';
   };
 
-  // 🔍 Filtrar incidentes por estado
+  // Filtrar incidentes por estado
   const filteredIncidents = incidents.filter(incident => {
     if (filter === 'todos') return true;
-    return incident.status === filter;
+
+    // Normalizar estado para comparación flexible
+    const status = incident.status?.toLowerCase().replace(' ', '_');
+
+    if (filter === 'abierto') return ['nuevo', 'abierto', 'open'].includes(status);
+    if (filter === 'en_proceso') return ['en_proceso', 'in_progress'].includes(status);
+    if (filter === 'resuelto') return ['resuelto', 'resolved', 'cerrado', 'closed'].includes(status);
+
+    return true;
   });
 
-  // 📅 Formatear fecha
+  // Formatear fecha
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('es-EC', {
@@ -72,44 +98,60 @@ function IncidentList() {
 
   return (
     <div className="incident-list-container">
+      {/* MODAL DE DETALLES */}
+      {selectedIncident && (
+        <IncidentAnalysisModal
+          incident={selectedIncident}
+          onClose={() => setSelectedIncident(null)}
+          onUpdate={fetchIncidents}
+        />
+      )}
+
       <div className="incident-list-header">
-        <h1>📊 Gestión de Incidentes</h1>
-        <button onClick={() => window.location.href = '/crear-incidente'} className="btn-new-incident">
-          ➕ Nuevo Incidente
+        <h1 className="flex items-center gap-2">
+          <Icons.ChartBar className="h-8 w-8 text-blue-900" /> Gestión de Incidentes
+        </h1>
+        <button
+          onClick={() => navigate('/reporting')}
+          className="btn-new-incident flex items-center gap-2"
+        >
+          <Icons.Plus className="h-5 w-5" /> Nuevo Incidente
         </button>
       </div>
 
-      {/* 🔍 FILTROS */}
+      {/* FILTROS */}
       <div className="filters">
-        <button 
+        <button
           className={filter === 'todos' ? 'filter-btn active' : 'filter-btn'}
           onClick={() => setFilter('todos')}
         >
-          📋 Todos ({incidents.length})
+          <span className="flex items-center gap-2"><Icons.File className="h-4 w-4" /> Todos ({incidents.length})</span>
         </button>
-        <button 
+        <button
           className={filter === 'abierto' ? 'filter-btn active' : 'filter-btn'}
           onClick={() => setFilter('abierto')}
         >
-          🔓 Abiertos ({incidents.filter(i => i.status === 'abierto').length})
+          <span className="flex items-center gap-2"><Icons.Alert className="h-4 w-4" /> Nuevos</span>
         </button>
-        <button 
+        <button
           className={filter === 'en_proceso' ? 'filter-btn active' : 'filter-btn'}
           onClick={() => setFilter('en_proceso')}
         >
-          ⚙️ En Proceso ({incidents.filter(i => i.status === 'en_proceso').length})
+          <span className="flex items-center gap-2"><Icons.Settings className="h-4 w-4" /> En Proceso</span>
         </button>
-        <button 
+        <button
           className={filter === 'resuelto' ? 'filter-btn active' : 'filter-btn'}
           onClick={() => setFilter('resuelto')}
         >
-          ✅ Resueltos ({incidents.filter(i => i.status === 'resuelto').length})
+          <span className="flex items-center gap-2"><Icons.Check className="h-4 w-4" /> Resueltos</span>
         </button>
       </div>
 
-      {/* 📊 TABLA DE INCIDENTES */}
+      {/* TABLA DE INCIDENTES */}
       {loading ? (
-        <div className="loading">🔄 Cargando incidentes...</div>
+        <div className="loading flex items-center justify-center gap-2">
+          <Icons.Refresh className="h-6 w-6 animate-spin" /> Cargando incidentes...
+        </div>
       ) : (
         <div className="table-container">
           <table className="incidents-table">
@@ -128,33 +170,40 @@ function IncidentList() {
               {filteredIncidents.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="no-data">
-                    📭 No hay incidentes registrados
+                    <div className="flex flex-col items-center justify-center gap-2 py-8">
+                      <Icons.Search className="h-8 w-8 opacity-50" />
+                      <span>No hay incidentes registrados</span>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 filteredIncidents.map((incident, index) => (
-                  <tr key={incident.id}>
-                    <td>{index + 1}</td>
+                  <tr key={incident.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="font-mono text-xs text-slate-500">#{incident.id}</td>
                     <td>
-                      <span className="incident-type">{incident.incident_type}</span>
+                      <span className="incident-type font-medium">{incident.incident_type}</span>
                     </td>
                     <td className="description-cell">
-                      {incident.description.substring(0, 80)}...
+                      {incident.description.substring(0, 60)}...
                     </td>
                     <td>
-                      <span className={`severity-badge ${getSeverityClass(incident.severity)}`}>
-                        {incident.severity}
+                      <span className={`severity-badge ${getSeverityClass(incident.risk_level || incident.severity)}`}>
+                        {incident.risk_level || incident.severity}
                       </span>
                     </td>
                     <td>
                       <span className={`status-badge ${getStatusClass(incident.status)}`}>
-                        {incident.status === 'en_proceso' ? 'En Proceso' : incident.status}
+                        {incident.status}
                       </span>
                     </td>
-                    <td>{formatDate(incident.created_at)}</td>
+                    <td className="text-sm text-slate-600">{formatDate(incident.created_at)}</td>
                     <td>
-                      <button className="btn-view" title="Ver detalles">
-                        👁️
+                      <button
+                        className="btn-view flex items-center justify-center bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-full transition-colors"
+                        title="Ver detalles / Gestionar"
+                        onClick={() => setSelectedIncident(incident)}
+                      >
+                        <Icons.Eye className="h-4 w-4" />
                       </button>
                     </td>
                   </tr>

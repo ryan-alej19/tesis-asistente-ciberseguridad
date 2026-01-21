@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# 🔥 CARGAR VARIABLES DE ENTORNO DESDE .env
+#  CARGAR VARIABLES DE ENTORNO DESDE .env
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -208,13 +208,14 @@ LOGGING = {
     },
 }
 # ==========================================
-# 🛡️ VIRUSTOTAL API CONFIGURATION
+#  VIRUSTOTAL API CONFIGURATION
 # ==========================================
-VIRUSTOTAL_API_KEY = '490f40a88479a02a482c2d1bb35c5391190d98caaa702eaacdac055a38f63037'
+VIRUSTOTAL_API_KEY = os.getenv('VIRUSTOTAL_API_KEY', '')
+
 # ==========================================
-# 🤖 GEMINI API CONFIGURATION
+#  GEMINI API CONFIGURATION
 # ==========================================
-GEMINI_API_KEY = 'AIzaSyA0YAkH7llL-7IXhPA3QGtHyBMisHu9MGA'
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 # Al final del archivo
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

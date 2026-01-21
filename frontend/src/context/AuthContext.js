@@ -8,6 +8,10 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const API_URL = process.env.REACT_APP_API_URL
+    ? `${process.env.REACT_APP_API_URL}/api`
+    : 'http://127.0.0.1:8000/api';
+
   useEffect(() => {
     // Verificar si hay token guardado al cargar la app
     const savedToken = localStorage.getItem('access_token');
@@ -21,13 +25,13 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUserProfile = async (accessToken) => {
     try {
-      const response = await axios.get('http://localhost:8000/api/auth/profile/', {
+      const response = await axios.get(`${API_URL}/auth/profile/`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       setUser(response.data);
       setLoading(false);
     } catch (error) {
-      console.error('❌ Error fetching profile:', error);
+      console.error('Error fetching profile:', error);
       // Si el token es inválido, limpiar todo
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
@@ -39,27 +43,27 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      const response = await axios.post('http://localhost:8000/api/auth/token/', {
+      const response = await axios.post(`${API_URL}/auth/token/`, {
         username,
         password
       });
-      
+
       const { access, refresh } = response.data;
-      
+
       // Guardar tokens
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
       setToken(access);
-      
+
       // Obtener perfil del usuario
       await fetchUserProfile(access);
-      
+
       return { success: true };
     } catch (error) {
-      console.error('❌ Login error:', error);
-      return { 
-        success: false, 
-        error: error.response?.data?.detail || 'Error al iniciar sesión' 
+      console.error(' Login error:', error);
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Error al iniciar sesión'
       };
     }
   };
@@ -68,12 +72,12 @@ export const AuthProvider = ({ children }) => {
     // Limpiar localStorage
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
-    
+
     // Limpiar estados
     setUser(null);
     setToken(null);
-    
-    console.log('✅ Sesión cerrada correctamente');
+
+
   };
 
   return (

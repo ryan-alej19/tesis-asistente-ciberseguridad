@@ -1,7 +1,7 @@
 """
-🛡️ SERVICIO VIRUSTOTAL + GEMINI AI - TESIS CIBERSEGURIDAD
+SERVICIO VIRUSTOTAL + GEMINI AI - TESIS CIBERSEGURIDAD
 Ryan Gallegos Mera - PUCESI
-Última actualización: 03 de Enero, 2026
+Última actualización: 07 de Enero, 2026
 """
 
 import requests
@@ -37,29 +37,13 @@ class VirusTotalService:
     def analyze_url(self, url):
         """
         Analiza una URL con VirusTotal
-        
-        Args:
-            url (str): URL a analizar
-            
-        Returns:
-            dict: {
-                'success': bool,
-                'detections': int,
-                'total_engines': int,
-                'malicious': int,
-                'suspicious': int,
-                'harmless': int,
-                'undetected': int,
-                'permalink': str,
-                'error': str (opcional)
-            }
         """
         if not self.api_key:
             return self._error_response("API Key de VirusTotal no configurada")
         
         try:
             print(f"\n{'='*60}")
-            print(f"🛡️ ANALIZANDO URL CON VIRUSTOTAL: {url}")
+            print(f"[VIRUSTOTAL] ANALIZANDO URL: {url}")
             print(f"{'='*60}")
             
             # Paso 1: Enviar URL para análisis
@@ -74,14 +58,14 @@ class VirusTotalService:
             )
             
             if response.status_code != 200:
-                print(f"❌ Error HTTP: {response.status_code}")
+                print(f"[ERROR] Error HTTP: {response.status_code}")
                 return self._error_response(f"Error HTTP {response.status_code}")
             
             analysis_id = response.json()["data"]["id"]
-            print(f"✅ URL enviada - Analysis ID: {analysis_id}")
+            print(f"[INFO] URL enviada - Analysis ID: {analysis_id}")
             
             # Paso 2: Esperar 3 segundos para que VirusTotal procese
-            print("⏳ Esperando análisis...")
+            print("[INFO] Esperando análisis...")
             time.sleep(3)
             
             # Paso 3: Obtener resultado del análisis
@@ -89,7 +73,7 @@ class VirusTotalService:
             result_response = requests.get(result_url, headers=self.headers, timeout=15)
             
             if result_response.status_code != 200:
-                print(f"❌ Error obteniendo resultado: {result_response.status_code}")
+                print(f"[ERROR] Error obteniendo resultado: {result_response.status_code}")
                 return self._error_response("Error al obtener análisis")
             
             data = result_response.json()["data"]["attributes"]
@@ -116,7 +100,7 @@ class VirusTotalService:
                 "detection_rate": round((detections / total_engines * 100), 2) if total_engines > 0 else 0
             }
             
-            print(f"✅ ANÁLISIS COMPLETO:")
+            print(f"[SUCCESS] ANÁLISIS COMPLETO:")
             print(f"   Detecciones: {detections}/{total_engines}")
             print(f"   Malicioso: {malicious}")
             print(f"   Sospechoso: {suspicious}")
@@ -126,25 +110,23 @@ class VirusTotalService:
             return result
             
         except requests.exceptions.Timeout:
-            print("❌ TIMEOUT - VirusTotal no respondió")
+            print("[ERROR] TIMEOUT - VirusTotal no respondió")
             return self._error_response("Timeout - VirusTotal no respondió a tiempo")
         
         except requests.exceptions.RequestException as e:
-            print(f"❌ ERROR DE CONEXIÓN: {str(e)}")
+            print(f"[ERROR] Error de conexión: {str(e)}")
             return self._error_response(f"Error de conexión: {str(e)}")
         
         except KeyError as e:
-            print(f"❌ ERROR EN RESPUESTA: Campo faltante {str(e)}")
+            print(f"[ERROR] Respuesta inválida: Campo faltante {str(e)}")
             return self._error_response("Respuesta inválida de VirusTotal")
         
         except Exception as e:
-            print(f"❌ ERROR INESPERADO: {str(e)}")
+            print(f"[ERROR] Error inesperado: {str(e)}")
             import traceback
             traceback.print_exc()
             return self._error_response(f"Error inesperado: {str(e)}")
     
-    def _error_response(self, message):
-        """Respuesta estándar para errores"""
         return {
             "success": False,
             "detections": 0,
@@ -158,143 +140,203 @@ class VirusTotalService:
             "detection_rate": 0
         }
 
+    def analyze_file(self, file_obj):
+        """
+        Analiza un archivo con VirusTotal (Real SHA-256 calc + Upload)
+        """
+        if not self.api_key:
+            return self._error_response("API Key de VirusTotal no configurada")
+        
+        import hashlib
+        
+        try:
+            print(f"\n{'='*60}")
+            print(f"[VIRUSTOTAL] ANALIZANDO ARCHIVO: {file_obj.name}")
+            print(f"{'='*60}")
+            
+            # 1. Calcular SHA-256
+            sha256_hash = hashlib.sha256()
+            for chunk in file_obj.chunks():
+                sha256_hash.update(chunk)
+            file_hash = sha256_hash.hexdigest()
+            print(f"[INFO] SHA-256 Calculado: {file_hash}")
+            
+            # --- MOCK PARA ARCHIVO EICAR O DEMO (Opcional, mantener logic si es muy grande) ---
+            # Si el archivo es > 32MB la API standard falla.
+            # Convertimos el archivo de vuelta al inicio para leerlo de nuevo si se sube
+            file_obj.seek(0)
+
+            # Paso 2: Subir archivo
+            files = {'file': (file_obj.name, file_obj, 'application/octet-stream')}
+            scan_url = f"{self.BASE_URL}/files"
+            
+            response = requests.post(
+                scan_url, 
+                headers=self.headers, 
+                files=files,
+                timeout=60 # Mayor timeout para subidas
+            )
+            
+            if response.status_code != 200:
+                print(f"[ERROR] Error HTTP al subir: {response.status_code} - {response.text}")
+                return self._error_response(f"Error VirusTotal: {response.status_code}")
+            
+            analysis_id = response.json()["data"]["id"]
+            print(f"[INFO] Archivo enviado - Analysis ID: {analysis_id}")
+            
+            print("[INFO] Esperando análisis (Puede tardar)...")
+            # Loop de espera (máx 30 segs)
+            for i in range(5):
+                time.sleep(5) 
+                print(f"[INFO] Checkeando resultado... intento {i+1}")
+                
+                result_url = f"{self.BASE_URL}/analyses/{analysis_id}"
+                result_response = requests.get(result_url, headers=self.headers, timeout=15)
+                
+                if result_response.status_code == 200:
+                    data = result_response.json()["data"]["attributes"]
+                    status = data.get("status")
+                    if status == "completed":
+                        break
+            
+            if result_response.status_code != 200:
+                return self._error_response("Error al obtener análisis")
+            
+            data = result_response.json()["data"]["attributes"]
+            stats = data.get("stats", {})
+            
+            malicious = stats.get("malicious", 0)
+            suspicious = stats.get("suspicious", 0)
+            
+            total_engines = sum(stats.values())
+            detections = malicious + suspicious
+            
+            # Link permanente usando el hash calculado (más seguro)
+            permalink = f"https://www.virustotal.com/gui/file/{file_hash}"
+            
+            result = {
+                "success": True,
+                "detections": detections,
+                "total_engines": total_engines,
+                "malicious": malicious,
+                "suspicious": suspicious,
+                "file_hash": file_hash,
+                "permalink": permalink,
+                "detection_rate": round((detections / total_engines * 100), 2) if total_engines > 0 else 0
+            }
+            return result
+
+        except Exception as e:
+            print(f"[ERROR] Error inesperado en análisis de archivo: {str(e)}")
+            return self._error_response(f"Error procesando archivo: {str(e)}")
+
 
 # =========================================================
-# 🤖 SERVICIO GEMINI AI
+# SERVICIO GEMINI AI (JSON STRUCTURED)
 # =========================================================
 
 def analyze_with_gemini(incident_data):
     """
-    Analiza un incidente de ciberseguridad con Gemini AI
-    
-    Args:
-        incident_data (dict): {
-            'incident_type': str,
-            'description': str,
-            'url': str (opcional),
-            'virustotal_result': dict (opcional)
-        }
-        
-    Returns:
-        dict: {
-            'success': bool,
-            'risk_level': str,
-            'analysis': str,
-            'recommendations': str,
-            'confidence': float,
-            'error': str (opcional)
-        }
+    Analiza un incidente devolviendo JSON estructurado con explicaciones claras.
     """
     try:
         print(f"\n{'='*60}")
-        print(f"🤖 ANALIZANDO CON GEMINI AI")
+        print(f"[AI] ANALIZANDO CON GEMINI AI (JSON MODE)")
         print(f"{'='*60}")
         
         if not GEMINI_API_KEY:
-            print("❌ GEMINI API KEY NO CONFIGURADA")
             return {
                 "success": False,
                 "error": "Gemini API key no configurada",
                 "risk_level": "DESCONOCIDO",
-                "analysis": "No se pudo realizar análisis con IA",
-                "recommendations": "Configure la API key de Gemini",
+                "explanation_simple": "No se pudo realizar análisis.",
                 "confidence": 0.0
             }
         
         # Crear el modelo
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-2.0-flash') # Modelo disponible verificado
         
-        # Construir el prompt
-        vt_info = ""
-        if 'virustotal_result' in incident_data and incident_data['virustotal_result'].get('success'):
-            vt = incident_data['virustotal_result']
+        # Construir contexto de VT
+        vt_info = "No hay análisis de VirusTotal disponible."
+        vt = incident_data.get('virustotal_result')
+        if vt and vt.get('success'):
             vt_info = f"""
-            
-**Análisis VirusTotal:**
-- Detecciones: {vt.get('detections', 0)}/{vt.get('total_engines', 0)}
-- Maliciosos: {vt.get('malicious', 0)}
-- Sospechosos: {vt.get('suspicious', 0)}
-- Tasa de detección: {vt.get('detection_rate', 0)}%
+            RESULTADOS VIRUSTOTAL:
+            - Detecciones Maliciosas: {vt.get('detections', 0)} de {vt.get('total_engines', 0)} motores.
+            - Hash del archivo: {vt.get('file_hash', 'N/A')}
+            - Tasa de detección: {vt.get('detection_rate', 0)}%
             """
         
         prompt = f"""
-Eres un analista de ciberseguridad experto. Analiza el siguiente incidente de seguridad:
-
-**Tipo de Incidente:** {incident_data.get('incident_type', 'No especificado')}
-**Descripción:** {incident_data.get('description', 'Sin descripción')}
-**URL reportada:** {incident_data.get('url', 'No proporcionada')}
-{vt_info}
-
-Por favor, proporciona:
-
-1. **NIVEL DE RIESGO** (responde SOLO: ALTO, MEDIO o BAJO)
-2. **ANÁLISIS TÉCNICO** (máximo 3 oraciones explicando el riesgo)
-3. **RECOMENDACIONES** (3 acciones concretas que el empleado debe tomar)
-4. **CONFIANZA** (porcentaje de certeza de tu análisis, ejemplo: 85)
-
-Formato de respuesta:
-NIVEL_RIESGO: [ALTO/MEDIO/BAJO]
-ANÁLISIS: [tu análisis]
-RECOMENDACIONES: [tus recomendaciones]
-CONFIANZA: [número entre 0-100]
-"""
+        Actúa como un experto analista del SOC (Security Operations Center).
+        Analiza el siguiente incidente reportado por un empleado y devuelve un objeto JSON ESTRICTO.
         
-        print("📤 Enviando prompt a Gemini...")
+        DETALLES DEL INCIDENTE:
+        - Tipo: {incident_data.get('incident_type', 'General')}
+        - Descripción: "{incident_data.get('description', 'Sin descripción')}"
+        - URL Sospechosa: {incident_data.get('url', 'Ninguna')}
+        {vt_info}
+        
+        Genera la respuesta EXCLUSIVAMENTE en formato JSON con esta estructura:
+        {{
+            "risk_level": "ALTO" | "MEDIO" | "BAJO",
+            "simple_explanation": "Una frase clara y directa para el empleado explicando por qué es peligroso o seguro. Sin tecnicismos.",
+            "technical_context": "Un párrafo detallado para el administrador técnico explicando vectores de ataque, TTPs o detalles del malware.",
+            "indicators": ["Lista", "de", "indicadores", "clave", "detectados"],
+            "recommendations": ["Acción 1", "Acción 2"],
+            "confidence": 95
+        }}
+        """
+        
+        print("[INFO] Enviando prompt a Gemini...")
         response = model.generate_content(prompt)
         response_text = response.text
         
-        print(f"✅ Respuesta recibida:\n{response_text[:200]}...")
+        print(f"[SUCCESS] Respuesta recibida (Raw):\n{response_text[:100]}...")
         
-        # Extraer información de la respuesta
-        risk_level = "MEDIO"  # Por defecto
-        analysis = ""
-        recommendations = ""
-        confidence = 75.0
+        # Limpieza de JSON (por si viene con backticks)
+        clean_json = response_text.strip()
+        if clean_json.startswith('```json'):
+            clean_json = clean_json.replace('```json', '').replace('```', '')
         
-        lines = response_text.split('\n')
-        for line in lines:
-            if 'NIVEL_RIESGO:' in line:
-                risk_level = line.split(':')[1].strip()
-            elif 'ANÁLISIS:' in line:
-                analysis = line.split(':', 1)[1].strip()
-            elif 'RECOMENDACIONES:' in line:
-                recommendations = line.split(':', 1)[1].strip()
-            elif 'CONFIANZA:' in line:
-                try:
-                    confidence = float(line.split(':')[1].strip().replace('%', ''))
-                except:
-                    confidence = 75.0
-        
-        # Si no se pudo extraer, usar todo el texto
-        if not analysis:
-            analysis = response_text
-        
+        import json
+        try:
+            data = json.loads(clean_json)
+        except json.JSONDecodeError:
+            print("[ERROR] Fallo al parsear JSON de Gemini. Usando fallback.")
+            data = {
+                "risk_level": "MEDIO",
+                "simple_explanation": "El análisis automático no pudo estructurar la respuesta, pero se detectaron elementos sospechosos.",
+                "technical_context": response_text,
+                "indicators": ["Error de parseo IA"],
+                "recommendations": ["Contactar a soporte"],
+                "confidence": 50
+            }
+
+        # Mapeo final para compatibilidad
         result = {
             "success": True,
-            "risk_level": risk_level,
-            "analysis": analysis,
-            "recommendations": recommendations,
-            "confidence": confidence,
-            "full_response": response_text
+            "risk_level": data.get("risk_level", "MEDIO"),
+            "analysis": data.get("simple_explanation", ""), # Compatibilidad
+            "explanation": data.get("simple_explanation", ""),
+            "technical_context": data.get("technical_context", ""),
+            "indicators": data.get("indicators", []),
+            "recommendations": " ".join(data.get("recommendations", [])), # String para compatibilidad
+            "recommendations_list": data.get("recommendations", []), # Lista nueva
+            "confidence": float(data.get("confidence", 70)),
+            "source": "Gemini 1.5 Flash"
         }
-        
-        print(f"✅ ANÁLISIS GEMINI COMPLETO:")
-        print(f"   Riesgo: {risk_level}")
-        print(f"   Confianza: {confidence}%")
-        print(f"{'='*60}\n")
         
         return result
         
     except Exception as e:
-        print(f"❌ ERROR EN GEMINI AI: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        
+        print(f"[ERROR] GEMINI CRASH: {str(e)}")
+        # Fallback local muy básico
         return {
-            "success": False,
-            "error": str(e),
-            "risk_level": "DESCONOCIDO",
-            "analysis": "Error al procesar con Gemini AI",
-            "recommendations": "Contacte al equipo de seguridad",
-            "confidence": 0.0
+             "success": True,
+             "risk_level": "MEDIO", 
+             "explanation": "No se pudo conectar con la IA. Se recomienda precaución.",
+             "technical_context": f"Error de conexión: {str(e)}",
+             "confidence": 0,
+             "source": "System Fallback"
         }
