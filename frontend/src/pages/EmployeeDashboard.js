@@ -61,9 +61,70 @@ const HistoryItem = ({ incident, isSelected, onClick }) => {
   );
 };
 
+// 1. VirusTotal Gauge Component
+const VirusTotalGauge = ({ malicious, total, error, className = "" }) => {
+  if (error) {
+    const isAuthError = error.includes('401') || error.includes('Credenciales');
+    return (
+      <div className={`flex flex-col items-center justify-center p-4 bg-slate-900 rounded-xl border border-slate-700 ${className}`}>
+        <div className="relative w-24 h-24 flex items-center justify-center">
+          <svg className="w-full h-full transform -rotate-90">
+            <circle cx="48" cy="48" r="36" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-800" />
+            <circle cx="48" cy="48" r="36" stroke="currentColor" strokeWidth="4" fill="transparent" strokeDasharray="150" strokeDashoffset={100} className={isAuthError ? "text-amber-500" : "text-slate-500"} strokeLinecap="round" />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+            <Icons.Lock className={`h-6 w-6 mb-1 ${isAuthError ? "text-amber-400" : "text-slate-400"}`} />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              {isAuthError ? 'AUTH' : 'ERR'}
+            </span>
+          </div>
+        </div>
+        <div className="mt-2 text-center">
+          <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">External Feed</h4>
+          <div className={`text-[10px] font-mono font-bold mt-1 px-3 py-1 rounded-full border ${isAuthError ? 'bg-amber-900/20 text-amber-400 border-amber-900/50' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+            {isAuthError ? 'UNAUTHORIZED' : 'OFFLINE'}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const radius = 36;
+  const circumference = 2 * Math.PI * radius;
+
+  const isClean = malicious === 0;
+  const colorClass = isClean ? 'text-emerald-500' : 'text-red-500';
+  const bgColorClass = isClean ? 'text-emerald-900/20' : 'text-red-900/20';
+
+  return (
+    <div className={`flex flex-col items-center justify-center p-4 bg-slate-900 rounded-xl ${className}`}>
+      <div className="relative w-24 h-24 flex items-center justify-center">
+        <svg className="w-full h-full transform -rotate-90">
+          <circle cx="48" cy="48" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" className={bgColorClass} />
+          <circle cx="48" cy="48" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={circumference} strokeDashoffset={0} className={colorClass} strokeLinecap="round" />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+          <span className={`text-2xl font-bold ${isClean ? 'text-emerald-400' : 'text-red-400'}`}>
+            {malicious}
+          </span>
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+            / {total}
+          </span>
+        </div>
+      </div>
+      <div className="mt-2 text-center">
+        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Community Score</h4>
+        <div className={`text-xs font-mono font-bold mt-1 px-2 py-0.5 rounded-full ${isClean ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+          {isClean ? 'CLEAN' : 'MALICIOUS'}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // 2. AI Analysis Panel (Right Column)
 const AIAnalysisPanel = ({ isAnalyzing, analysisData, incidentCount, virustotalData }) => {
-  const [showTechnical, setShowTechnical] = useState(false);
+  const [showTechnical, setShowTechnical] = useState(true); // Default valid 'chevere' context visible
 
   if (isAnalyzing) {
     return (
@@ -92,7 +153,6 @@ const AIAnalysisPanel = ({ isAnalyzing, analysisData, incidentCount, virustotalD
 
         {/* Educational Content */}
         <div className="space-y-6 border-t border-slate-200 pt-6">
-          {/* Tips or Stats */}
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <h4 className="text-xs font-bold text-slate-700 uppercase mb-2">💡 Tips de Seguridad</h4>
             <ul className="text-xs text-slate-600 space-y-2 list-disc list-inside">
@@ -109,47 +169,31 @@ const AIAnalysisPanel = ({ isAnalyzing, analysisData, incidentCount, virustotalD
   return (
     <div className="p-6 space-y-6 animate-fade-in pb-20">
 
-      {/* 1. VIRUSTOTAL RESULTS (Files/URLs) */}
+      {/* VIRUSTOTAL GAUGE (Top Priority) */}
       {virustotalData && (
-        <div className="mb-6 border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
-          <div className="bg-slate-100 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
-            <h3 className="flex items-center gap-2 font-bold text-slate-800 text-xs uppercase">
-              <Icons.Shield className="h-4 w-4 text-blue-600" />
-              VirusTotal {virustotalData.file_hash ? '(Archivo)' : '(URL)'}
-            </h3>
-            {virustotalData.malicious > 0 ? (
-              <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full ring-1 ring-red-200">
-                MALWARE
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full ring-1 ring-green-200">
-                CLEAN
-              </span>
-            )}
-          </div>
-          <div className="p-4">
-            <div className="grid grid-cols-2 gap-4 mb-3">
-              <div className="text-center p-2 bg-slate-50 rounded border border-slate-100">
-                <div className="text-lg font-bold text-slate-700">{virustotalData.detections}/{virustotalData.total_engines}</div>
-                <div className="text-[10px] text-slate-400 uppercase">Motores</div>
-              </div>
-              <div className="text-center p-2 bg-slate-50 rounded border border-slate-100">
-                <div className={`text-lg font-bold ${virustotalData.malicious > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {virustotalData.detection_rate}%
-                </div>
-                <div className="text-[10px] text-slate-400 uppercase">Tasa Detección</div>
-              </div>
-            </div>
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-2 px-1">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">VIRUSTOTAL</span>
             {virustotalData.permalink && (
-              <a href={virustotalData.permalink} target="_blank" rel="noreferrer" className="block text-center text-xs text-indigo-600 hover:text-indigo-800 hover:underline">
-                Ver reporte completo en VirusTotal ↗
+              <a
+                href={virustotalData.permalink}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 hover:text-indigo-600 hover:underline"
+              >
+                <Icons.Link className="h-3 w-3" /> Ver Reporte Oficial
               </a>
             )}
           </div>
+          <VirusTotalGauge
+            malicious={virustotalData.malicious}
+            total={virustotalData.total_engines}
+            error={virustotalData.success === false ? (virustotalData.error || 'Error VT') : null}
+          />
         </div>
       )}
 
-      {/* 2. GEMINI AI RESULTS */}
+      {/* GEMINI AI RESULTS MAIN CARD */}
       {analysisData && (
         <>
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -164,8 +208,8 @@ const AIAnalysisPanel = ({ isAnalyzing, analysisData, incidentCount, virustotalD
 
           {/* Risk Score */}
           <div className={`p-5 rounded-xl border-l-4 shadow-sm ${(analysisData.risk_level === 'ALTO' || analysisData.risk_level === 'critical') ? 'bg-red-50 border-red-500' :
-              (analysisData.risk_level === 'MEDIO' || analysisData.risk_level === 'high') ? 'bg-orange-50 border-orange-500' :
-                'bg-green-50 border-green-500'
+            (analysisData.risk_level === 'MEDIO' || analysisData.risk_level === 'high') ? 'bg-orange-50 border-orange-500' :
+              'bg-green-50 border-green-500'
             }`}>
             <div className="flex items-center gap-2 mb-2">
               {(analysisData.risk_level === 'ALTO' || analysisData.risk_level === 'critical')
@@ -180,61 +224,83 @@ const AIAnalysisPanel = ({ isAnalyzing, analysisData, incidentCount, virustotalD
             <p className="text-sm text-slate-700 leading-relaxed font-medium">
               {analysisData.explanation || analysisData.simple_explanation || analysisData.analysis}
             </p>
+
+            {/* VIRUSTOTAL MINI PREVIEW */}
+            {virustotalData && (
+              <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Icons.Shield className="h-4 w-4 text-blue-500" />
+                  <span className="text-xs font-bold text-slate-600">VirusTotal Preview:</span>
+                </div>
+                <div className={`text-xs font-bold px-2 py-0.5 rounded ${virustotalData.malicious > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                  {virustotalData.malicious > 0 ? `${virustotalData.malicious} Maliciosos` : 'Limpio'}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Technical Context (Expandable) */}
+          {/* Technical Context (Styled Chevere) */}
           {(analysisData.technical_context || analysisData.contexto_tecnico) && (
-            <div className="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+            <div className="bg-indigo-50/50 rounded-xl border border-indigo-100 overflow-hidden shadow-sm">
               <button
                 onClick={() => setShowTechnical(!showTechnical)}
-                className="w-full flex justify-between items-center p-3 text-xs font-bold text-slate-600 uppercase hover:bg-slate-100"
+                className="w-full flex justify-between items-center p-3 text-xs font-bold text-indigo-800 uppercase hover:bg-indigo-100/50 transition-colors"
               >
-                <span>Contexto Técnico</span>
-                <Icons.ChevronDown className={`h-4 w-4 transition-transform ${showTechnical ? 'rotate-180' : ''}`} />
+                <span className="flex items-center gap-2">
+                  <Icons.Search className="h-4 w-4 text-indigo-500" /> Contexto Técnico
+                </span>
+                <Icons.ChevronDown className={`h-4 w-4 text-indigo-400 transition-transform ${showTechnical ? 'rotate-180' : ''}`} />
               </button>
               {showTechnical && (
-                <div className="p-3 pt-0 text-xs text-slate-600 border-t border-slate-200 bg-white leading-relaxed">
+                <div className="p-4 pt-0 text-xs text-indigo-900/80 leading-relaxed font-medium">
                   {analysisData.technical_context || analysisData.contexto_tecnico}
                 </div>
               )}
             </div>
           )}
 
-          {/* Indicators */}
+          {/* Indicators Detected (Tags Style) */}
           <div>
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Indicadores Detectados</h4>
+            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Indicadores Detectados</h4>
             {(analysisData.indicators || analysisData.indicadores || []).length > 0 ? (
-              <ul className="space-y-2">
+              <div className="flex flex-wrap gap-2">
                 {(analysisData.indicators || analysisData.indicadores).map((ind, i) => (
-                  <li key={i} className="flex gap-3 text-sm text-slate-700 bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
-                    <Icons.Search className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+                  <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                    <Icons.Link className="h-3 w-3 text-slate-400" />
                     {ind}
-                  </li>
+                  </span>
                 ))}
-              </ul>
+              </div>
             ) : (
-              <p className="text-sm text-slate-400 italic bg-white p-3 rounded border border-slate-100">
+              <p className="text-xs text-slate-400 italic">
                 No se detectaron indicadores específicos.
               </p>
             )}
           </div>
 
-          {/* Recommendations */}
+          {/* Recommendations & VT Summary */}
           {(analysisData.recommendations || analysisData.recommended_action) && (
-            <div className="bg-slate-800 text-white p-4 rounded-xl shadow-md">
+            <div className="bg-slate-800 text-white p-4 rounded-xl shadow-lg shadow-slate-200">
               <h4 className="flex items-center gap-2 text-xs font-bold text-indigo-300 uppercase mb-2">
                 <Icons.Shield className="h-4 w-4" /> Recomendación
               </h4>
-              <p className="text-sm font-medium leading-relaxed opacity-90">
+              <p className="text-sm font-medium leading-relaxed opacity-90 mb-2">
                 {Array.isArray(analysisData.recommendations)
                   ? analysisData.recommendations.join(" ")
                   : (analysisData.recommendations || analysisData.recommended_action)}
               </p>
+              {virustotalData && virustotalData.malicious > 0 && (
+                <div className="mt-2 pt-2 border-t border-slate-700 text-[10px] text-red-300 flex items-center gap-1">
+                  <Icons.Alert className="h-3 w-3" />
+                  <span>VirusTotal detectó {virustotalData.malicious} amenazas confirmadas.</span>
+                </div>
+              )}
             </div>
           )}
         </>
-      )}
-    </div>
+      )
+      }
+    </div >
   );
 };
 
@@ -261,6 +327,7 @@ const EmployeeDashboard = () => {
   // AI Analysis State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [realTimeAnalysis, setRealTimeAnalysis] = useState(null);
+  const [realTimeVT, setRealTimeVT] = useState(null);
 
   // Initial Load
   useEffect(() => {
@@ -284,6 +351,7 @@ const EmployeeDashboard = () => {
     debounce(async (text, url) => {
       if ((!text || text.length < 10) && !url) {
         setRealTimeAnalysis(null);
+        setRealTimeVT(null);
         setIsAnalyzing(false);
         return;
       }
@@ -297,6 +365,13 @@ const EmployeeDashboard = () => {
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
+
+        // ALWAYS set VT result, even if success=false (e.g. 401 error)
+        if (res.data.virustotal) {
+          setRealTimeVT(res.data.virustotal);
+        } else {
+          setRealTimeVT(null);
+        }
 
         if (res.data.success) {
           setRealTimeAnalysis(res.data.analysis);
@@ -364,7 +439,7 @@ const EmployeeDashboard = () => {
       formData.append('incident_type', 'phishing');
       if (attachedFile) formData.append('attached_file', attachedFile);
 
-      await axios.post('http://localhost:8000/api/incidents/create/', formData, {
+      const res = await axios.post('http://localhost:8000/api/incidents/create/', formData, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -375,7 +450,17 @@ const EmployeeDashboard = () => {
       setForm({ url: '', description: '' });
       setAttachedFile(null);
       setRealTimeAnalysis(null);
+      setRealTimeVT(null);
       fetchIncidents(); // Refresh history
+
+      // Auto-open the new incident
+      // Auto-open - Ensure state updates don't clash
+      if (res.data.incident) {
+        // Small timeout to allow list refresh to stabilize
+        setTimeout(() => {
+          setSelectedIncident(res.data.incident);
+        }, 100);
+      }
 
       setTimeout(() => setSubmitSuccess(false), 5000);
 
@@ -392,6 +477,7 @@ const EmployeeDashboard = () => {
   const handleNewReportClick = () => {
     setSelectedIncident(null);
     setRealTimeAnalysis(null);
+    setRealTimeVT(null);
   };
 
   return (
@@ -556,7 +642,7 @@ const EmployeeDashboard = () => {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {/* Inputs (URL, Desc, File) - Keep same structure */}
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">URL (Opcional)</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">URL</label>
                     <div className="relative group">
                       <div className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-indigo-600 transition-colors"><Icons.Link className="h-5 w-5" /></div>
                       <input type="url" name="url" value={form.url} onChange={handleInputChange} placeholder="https://malicioso.com" className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 font-mono text-sm text-slate-900" />
@@ -564,7 +650,7 @@ const EmployeeDashboard = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Detalles</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Detalles (Opcional)</label>
                     <div className="relative">
                       <textarea name="description" value={form.description} onChange={handleInputChange} rows="6" placeholder="Describa qué sucedió..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 resize-none text-base leading-relaxed text-slate-900" />
                       <div className="absolute right-3 bottom-3 bg-white/80 backdrop-blur px-2 py-1 rounded text-[10px] items-center gap-2 flex">
@@ -625,7 +711,7 @@ const EmployeeDashboard = () => {
           <AIAnalysisPanel
             isAnalyzing={isAnalyzing}
             analysisData={selectedIncident ? selectedIncident.gemini_analysis : realTimeAnalysis}
-            virustotalData={selectedIncident ? selectedIncident.virustotal_result : null}
+            virustotalData={selectedIncident ? selectedIncident.virustotal_result : realTimeVT}
             incidentCount={incidents.length}
           />
         </div>

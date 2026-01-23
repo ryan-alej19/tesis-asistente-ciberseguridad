@@ -33,6 +33,20 @@ class VirusTotalService:
             "x-apikey": self.api_key,
             "Accept": "application/json"
         }
+
+    def _error_response(self, message):
+        """Helper para retornar errores formateados"""
+        return {
+            "success": False,
+            "error": message,
+            "detections": 0,
+            "total_engines": 0,
+            "malicious": 0,
+            "suspicious": 0,
+            "harmless": 0,
+            "undetected": 0,
+            "detection_rate": 0
+        }
     
     def analyze_url(self, url):
         """
@@ -57,9 +71,13 @@ class VirusTotalService:
                 timeout=15
             )
             
+            if response.status_code == 401:
+                print(f"[ERROR] API Key inválida o expirada (401).")
+                return self._error_response("Credenciales de VirusTotal Vencidas o Inválidas (401)")
+
             if response.status_code != 200:
                 print(f"[ERROR] Error HTTP: {response.status_code}")
-                return self._error_response(f"Error HTTP {response.status_code}")
+                return self._error_response(f"Error de Conexión: {response.status_code}")
             
             analysis_id = response.json()["data"]["id"]
             print(f"[INFO] URL enviada - Analysis ID: {analysis_id}")
@@ -281,8 +299,8 @@ def analyze_with_gemini(incident_data):
         {{
             "risk_level": "ALTO" | "MEDIO" | "BAJO",
             "simple_explanation": "Una frase clara y directa para el empleado explicando por qué es peligroso o seguro. Sin tecnicismos.",
-            "technical_context": "Un párrafo detallado para el administrador técnico explicando vectores de ataque, TTPs o detalles del malware.",
-            "indicators": ["Lista", "de", "indicadores", "clave", "detectados"],
+            "technical_context": "Un párrafo detallado para el administrador técnico explicando vectores de ataque, TTPs o detalles del malware. SI ES SEGURO: Explica por qué (certificados válidos, dominio reputado, etc).",
+            "indicators": ["Lista", "de", "indicadores", "clave", "detectados", "incluso", "si", "son", "positivos", "(ej: Dominio Legítimo, SSL Válido)"],
             "recommendations": ["Acción 1", "Acción 2"],
             "confidence": 95
         }}
@@ -326,6 +344,26 @@ def analyze_with_gemini(incident_data):
             "confidence": float(data.get("confidence", 70)),
             "source": "Gemini 1.5 Flash"
         }
+        
+        # --- CALIBRACIÓN DE CONFIANZA BASADA EN HECHOS (VirusTotal) ---
+        # Si tenemos datos duros de VT, la confianza debería ser 100%, no una estimación.
+        if vt and vt.get('success'):
+            total_engines = vt.get('total_engines', 0)
+            malicious = vt.get('malicious', 0)
+            
+            # CASO 1: Definitivamente Malicioso using VT confirmation
+            if malicious >= 2:
+                result['confidence'] = 100.0
+                result['risk_level'] = 'ALTO'
+                result['explanation'] = f"Confirmado por {malicious} motores antivirus como malicioso. {result['explanation']}"
+            
+            # CASO 2: Definitivamente Limpio (Scan robusto)
+            elif malicious == 0 and total_engines > 30:
+                result['confidence'] = 100.0
+                result['risk_level'] = 'BAJO'
+                # Si Gemini estaba dudando, corregimos
+                if result['risk_level'] != 'BAJO':
+                     result['explanation'] = "VirusTotal confirma que este sitio está limpio en más de 30 bases de datos."
         
         return result
         

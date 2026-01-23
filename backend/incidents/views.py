@@ -183,18 +183,26 @@ def analyze_text(request):
             return Response({'error': 'Texto o URL requeridos'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Usar el servicio de Gemini existente
-        # Nota: Para 'real-time', quizás queramos una versión más ligera o cacheada,
-        # pero por ahora usaremos la misma lógica completa.
+        vt_service = VirusTotalService()
+        virustotal_result = None
+        
+        if url:
+             try:
+                 virustotal_result = vt_service.analyze_url(url)
+             except Exception as e:
+                 logger.warning(f"Error calling VT in real-time: {e}")
+
         analysis = analyze_with_gemini({
             'incident_type': 'analysis_request', # Tipo dummy
             'description': description,
             'url': url,
-            'virustotal_result': None # No llamamos a VT en tiempo real para no saturar
+            'virustotal_result': virustotal_result
         })
         
         return Response({
             'success': True,
-            'analysis': analysis
+            'analysis': analysis,
+            'virustotal': virustotal_result
         }, status=status.HTTP_200_OK)
 
     except Exception as e:

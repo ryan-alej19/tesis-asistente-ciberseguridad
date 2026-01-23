@@ -20,11 +20,15 @@ const BusinessBrand = ({
     return (
         <div className={`flex items-center gap-2 ${className}`}>
             <div className={`flex items-center justify-center`}>
-                <Icons.Tool className={`${iconSize} ${iconColor}`} />
+                <img
+                    src="/logo_transparent.png"
+                    alt="Logo Talleres Luis Mera"
+                    className="h-12 w-auto object-contain"
+                />
             </div>
             <div className="flex flex-col">
                 <h1 className={`font-semibold tracking-tight leading-none ${textSize} ${textColor}`}>
-                    Talleres Mera
+                    Talleres Luis Mera
                 </h1>
                 <span className={`text-[10px] uppercase font-bold tracking-wider mt-0.5 ${subTextColor}`}>
                     Gestión para Pequeñas Empresas
