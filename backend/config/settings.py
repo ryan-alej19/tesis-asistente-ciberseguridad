@@ -119,9 +119,16 @@ USE_I18N = True
 USE_TZ = True
 
 # Static files
+# Archivos estáticos
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_DIRS = []
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
+WHITENOISE_AUTOREFRESH = DEBUG
+WHITENOISE_USE_FINDERS = DEBUG
+WHITENOISE_MAX_AGE = 0 if DEBUG else 31536000
 
 # Media files
 MEDIA_URL = '/media/'
